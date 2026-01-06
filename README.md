@@ -12,14 +12,6 @@ Optimizar el proceso de venta en restaurante mediante un sistema POS web, permit
 - Vite
 - Tailwind CSS
 
-## Estrutura del Proyecto 
-- Components/    ##Componentes Reutilizables 
-- Pages/         #Vistas Principales
-|---hooks/         #Lógica reutilizable
-|---lib/           #Utilidades
-|---App.tsx
-|---main.tsx 
-
 ## Requisitos 📦
 -Node.js v18 o superior 
 -npm o pnpm 
