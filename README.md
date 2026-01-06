@@ -13,7 +13,7 @@ Optimizar el proceso de venta en restaurante mediante un sistema POS web, permit
 - Tailwind CSS
 
 ## Estrutura del Proyecto 
-- Components/    #Componentes Reutilizables 
+- Components/    ##Componentes Reutilizables 
 - Pages/         #Vistas Principales
 |---hooks/         #Lógica reutilizable
 |---lib/           #Utilidades
