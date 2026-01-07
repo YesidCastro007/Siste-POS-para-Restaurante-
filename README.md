@@ -1,20 +1,20 @@
-# Sistema POS para Restaurante 
-Sistema de Punto de venta (POS) desarrollado con React, TypeScript y Vite. Permite la gestión de pedidos, productos y control de ventas en un restaurante. 
-> Proyecto desarrollado para una empresa del sector gastronomico (Santanderenao SAS).
-> Elementos Sensibles y datos reales han sido omitidos por confidencialidad.
+# Restaurant POS System 
+Point of Sale (POS) system developed with React, TypeScript, and Vite. It enables order management, product administration, and sales control for a restaurant. 
+> This project was developed for a company in the gastronomic sector (Santanderenao SAS).
+> Sensitive elements and real data have been omitted for confidentiality purposes.
 
-## Objetivo del Proyecto 🎯
-Optimizar el proceso de venta en restaurante mediante un sistema POS web, permitiendo el registro de pedidos, gestión de productos y control de ventas de forma eficiente. 
+## Project Objective 🎯
+To optimize the restaurant sales process through a web-based POS system, enabling efficient order resgistration, product management, and sales tracking.
 
-## Tecnologías 🚀
+## Technologies 🚀
 - React
 - TypeScript
 - Vite
 - Tailwind CSS
 
-## Requisitos 📦
+## Requirements 📦
 -Node.js v18 o superior 
--npm o pnpm 
+npm or pnpm 
 
 ## Instalación ⚙️
 git clone https://github.com/yesid-castro/sistema-pos-restaurante.git 
