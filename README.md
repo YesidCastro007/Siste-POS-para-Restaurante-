@@ -160,7 +160,7 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más det
 
 **Tu Nombre**
 - GitHub: [@YesiCastro007](https://github.com/YesidCastro007)
-- LinkedIn: [Yesid Castro]([https://www.linkedin.com/in/yesid-castro/))
+- LinkedIn: [@Yesid Castro]([https://www.linkedin.com/in/yesid-castro/)
 
 ## 🙏 Agradecimientos
 
