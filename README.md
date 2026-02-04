@@ -159,8 +159,8 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más det
 ## 👨‍💻 Autor
 
 **Tu Nombre**
-- GitHub: [@tu-usuario](https://github.com/tu-usuario)
-- LinkedIn: [Tu Perfil](https://linkedin.com/in/tu-perfil)
+- GitHub: [@YesiCastro007](https://github.com/YesidCastro007)
+- LinkedIn: [Yesid Castro]([https://www.linkedin.com/in/yesid-castro/))
 
 ## 🙏 Agradecimientos
 
