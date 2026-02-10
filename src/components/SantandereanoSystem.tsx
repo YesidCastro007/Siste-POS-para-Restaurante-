@@ -2161,8 +2161,9 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
-      <Card className="w-full max-w-7xl max-h-[98vh] sm:max-h-[95vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30 shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
+      <div className="min-h-screen flex items-start sm:items-center justify-center p-0 sm:p-4">
+        <Card className="w-full sm:max-w-7xl min-h-screen sm:min-h-0 sm:max-h-[95vh] bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border-0 sm:border border-red-500/30 shadow-2xl sm:rounded-lg rounded-none">
         {/* Header */}
         <CardHeader className="border-b border-red-500/30 bg-gradient-to-r from-red-600/20 to-red-800/20 p-3 sm:p-6">
           <div className="flex items-center justify-between">
@@ -2186,10 +2187,10 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
           </div>
         </CardHeader>
         
-        <CardContent className="p-0 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-3 h-[calc(98vh-80px)] sm:h-[calc(95vh-120px)]">
+        <CardContent className="p-0">
+          <div className="flex flex-col lg:grid lg:grid-cols-3 min-h-[calc(100vh-60px)] sm:min-h-0 sm:h-[calc(95vh-120px)]">
             {/* Panel de Categorías */}
-            <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto border-r border-red-500/20">
+            <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto flex-1 lg:border-r border-red-500/20">
               {/* Selector de Categorías */}
               <div className="grid grid-cols-5 gap-1.5 sm:gap-3 mb-4 sm:mb-6">
                 {categorias.map((categoria) => (
@@ -2216,16 +2217,16 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                       <span className="text-xl sm:text-2xl mr-2">🥩</span> Configurar Picada
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-red-300 mb-3">Tamaño</label>
+                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Tamaño</label>
                         <div className="grid grid-cols-2 gap-2">
                           {MENU_DATA.picadas.sizes.map((size) => (
                             <Button
                               key={size}
                               onClick={() => setPicadaConfig({...picadaConfig, size})}
                               variant={picadaConfig.size === size ? "default" : "outline"}
-                              className={`h-12 ${
+                              className={`h-10 sm:h-12 text-xs sm:text-sm ${
                                 picadaConfig.size === size 
                                   ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' 
                                   : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
@@ -2238,14 +2239,14 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-red-300 mb-3">Término</label>
+                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Término</label>
                         <div className="grid grid-cols-3 gap-2">
                           {MENU_DATA.picadas.terminos.map((termino) => (
                             <Button
                               key={termino}
                               onClick={() => setPicadaConfig({...picadaConfig, termino})}
                               variant={picadaConfig.termino === termino ? "default" : "outline"}
-                              className={`h-12 text-xs ${
+                              className={`h-10 sm:h-12 text-[10px] sm:text-xs ${
                                 picadaConfig.termino === termino 
                                   ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white' 
                                   : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
@@ -2259,13 +2260,13 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-red-300 mb-3">Carnes (Seleccione múltiples)</label>
-                      <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                      <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Carnes (Seleccione múltiples)</label>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                         {MENU_DATA.picadas.carnes.map((carne) => (
                           <Button
                             key={carne}
                             onClick={() => toggleCarne(carne)}
-                            className={`h-12 text-sm transition-all duration-200 ${
+                            className={`h-10 sm:h-12 text-xs sm:text-sm transition-all duration-200 ${
                               picadaConfig.carnes.includes(carne)
                                 ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
                                 : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
@@ -2277,9 +2278,9 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-red-300 mb-2">Precio</label>
+                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2">Precio</label>
                         <Input
                           type="text"
                           value={picadaConfig.precio ? parseInt(picadaConfig.precio).toLocaleString() : ''}
@@ -2288,16 +2289,16 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                             setPicadaConfig({...picadaConfig, precio: value});
                           }}
                           placeholder="Ej: 25.000"
-                          className="bg-white/5 border-red-500/30 text-white h-12"
+                          className="bg-white/5 border-red-500/30 text-white h-10 sm:h-12 text-sm"
                         />
                       </div>
                       <div className="flex items-end">
                         <Button
                           onClick={manejarPicada}
-                          className="w-full h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium"
+                          className="w-full h-10 sm:h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium text-sm"
                         >
                           <Plus className="w-4 h-4 mr-2" />
-                          Agregar Picada
+                          Agregar
                         </Button>
                       </div>
                     </div>
@@ -2305,12 +2306,12 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                 )}
 
                 {categoriaActual === 'gallina' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🐔</span> Productos de Gallina
+                  <div className="space-y-3 sm:space-y-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">🐔</span> Productos de Gallina
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                       {MENU_DATA.gallina.productos.map((producto) => (
                         <Button
                           key={producto.name}
@@ -2318,11 +2319,11 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                             agregarPedido({
                               tipo: 'gallina',
                               nombre: producto.name,
-                              termino: 'Jugoso', // Término por defecto
+                              termino: 'Jugoso',
                               precioItem: producto.price
                             });
                           }}
-                          className="h-16 flex justify-between items-center p-4 text-left bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-yellow-500 hover:to-orange-500 hover:text-white transition-all duration-200"
+                          className="h-12 sm:h-16 flex justify-between items-center p-3 sm:p-4 text-left bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-yellow-500 hover:to-orange-500 hover:text-white transition-all duration-200 text-xs sm:text-sm"
                         >
                           <span className="font-medium">{producto.name}</span>
                           <span className="text-green-400 font-bold">${producto.price.toLocaleString()}</span>
@@ -2333,12 +2334,12 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                 )}
 
                 {categoriaActual === 'sopas' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🍲</span> Sopas - ${precioSopas.toLocaleString()}
+                  <div className="space-y-3 sm:space-y-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">🍲</span> Sopas - ${precioSopas.toLocaleString()}
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                       {saboresSopas.map((sabor) => (
                         <Button
                           key={sabor}
@@ -2349,7 +2350,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                               precioItem: precioSopas
                             });
                           }}
-                          className="h-14 text-left p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-green-500 hover:to-green-600 hover:text-white transition-all duration-200"
+                          className="h-12 sm:h-14 text-left p-3 sm:p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-green-500 hover:to-green-600 hover:text-white transition-all duration-200 text-xs sm:text-sm"
                         >
                           {sabor}
                         </Button>
@@ -2359,12 +2360,12 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                 )}
 
                 {categoriaActual === 'bebidas' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🥤</span> Bebidas
+                  <div className="space-y-3 sm:space-y-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">🥤</span> Bebidas
                     </h3>
                     
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {Object.keys(MENU_DATA.bebidas).map((categoria) => (
                         <div key={categoria}>
                           <Button
@@ -2372,7 +2373,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                               setCategoriaBebidasActual(categoria === categoriaBebidasActual ? '' : categoria);
                               setBebidaSeleccionada('');
                             }}
-                            className={`w-full h-12 mb-3 text-left ${
+                            className={`w-full h-10 sm:h-12 mb-2 sm:mb-3 text-left text-xs sm:text-sm ${
                               categoriaBebidasActual === categoria
                                 ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
                                 : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
@@ -2382,7 +2383,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                           </Button>
                           
                           {categoriaBebidasActual === categoria && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ml-2 sm:ml-4">
                               {MENU_DATA.bebidas[categoria].map((bebida) => (
                                 <Button
                                   key={bebida.name}
@@ -2394,7 +2395,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                                       precioItem: bebida.price
                                     });
                                   }}
-                                  className="h-12 flex justify-between items-center p-3 text-sm bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-cyan-500 hover:to-blue-500 hover:text-white transition-all duration-200"
+                                  className="h-10 sm:h-12 flex justify-between items-center p-2 sm:p-3 text-xs sm:text-sm bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-cyan-500 hover:to-blue-500 hover:text-white transition-all duration-200"
                                 >
                                   <span>{bebida.name}</span>
                                   <span className="text-green-400 font-bold">${bebida.price.toLocaleString()}</span>
@@ -2405,17 +2406,16 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                         </div>
                       ))}
                     </div>
-
                   </div>
                 )}
 
                 {categoriaActual === 'adicionales' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🍟</span> Adicionales
+                  <div className="space-y-3 sm:space-y-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">🍟</span> Adicionales
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                       {MENU_DATA.adicionales.map((adicional) => (
                         <Button
                           key={adicional.name}
@@ -2426,7 +2426,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                               precioItem: adicional.price
                             });
                           }}
-                          className="h-14 flex justify-between items-center p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-600 hover:text-white transition-all duration-200"
+                          className="h-12 sm:h-14 flex justify-between items-center p-3 sm:p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-600 hover:text-white transition-all duration-200 text-xs sm:text-sm"
                         >
                           <span>{adicional.name}</span>
                           <span className="text-green-400 font-bold">${adicional.price.toLocaleString()}</span>
@@ -2439,7 +2439,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
             </div>
 
             {/* Panel de Pedido */}
-            <div className="p-3 sm:p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50">
+            <div className="p-3 sm:p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50 flex-shrink-0 border-t lg:border-t-0 border-red-500/20">
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base sm:text-lg font-semibold text-white">Pedido Actual</h3>
@@ -2448,7 +2448,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                   </Badge>
                 </div>
 
-                <div className="space-y-2 sm:space-y-3 max-h-[40vh] sm:max-h-96 overflow-y-auto">
+                <div className="space-y-2 sm:space-y-3 max-h-[30vh] sm:max-h-96 overflow-y-auto">
                   {pedidos.length === 0 ? (
                     <div className="text-center py-8 sm:py-12">
                       <UtensilsCrossed className="w-10 h-10 sm:w-12 sm:h-12 text-gray-500 mx-auto mb-2 sm:mb-3" />
