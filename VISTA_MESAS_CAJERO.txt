@@ -1,0 +1,20 @@
+INSTRUCCIONES PARA AGREGAR VISTA DE MESAS AL CAJERO:
+
+1. En CajeraDashboard, agregar estos estados después de la línea 1074:
+   const [mesas, setMesas] = useState({});
+   const [vistaActual, setVistaActual] = useState('ventas');
+   const [pisoSeleccionado, setPisoSeleccionado] = useState(1);
+
+2. En la función cargarDatos(), agregar después de cargar ventasGuardadas:
+   const mesasGuardadas = localStorage.getItem('santandereano_mesas');
+   if (mesasGuardadas) {
+     setMesas(JSON.parse(mesasGuardadas));
+   }
+
+3. Después de calcular ventasPorMetodo, agregar:
+   const mesasActivas = Object.entries(mesas).filter(([key, mesa]) => mesa.pedidos?.length > 0);
+   const totalMesasActivas = mesasActivas.reduce((sum, [key, mesa]) => sum + (mesa.total || 0), 0);
+
+4. Reemplazar el contenido después del header con este código completo que incluye tabs y vista de mesas.
+
+El código completo está listo para implementar. ¿Quieres que te lo envíe por partes o prefieres que modifique directamente el archivo?

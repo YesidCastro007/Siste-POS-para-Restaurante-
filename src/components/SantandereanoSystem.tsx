@@ -11,7 +11,14 @@ import { Separator } from '@/components/ui/separator';
 const getUsersFromStorage = () => {
   try {
     const users = localStorage.getItem('santandereano_users');
-    return users ? JSON.parse(users) : getDefaultUsers();
+    if (users) {
+      const parsedUsers = JSON.parse(users);
+      // Asegurar que los usuarios por defecto existan
+      const defaultUsers = getDefaultUsersOnly();
+      const mergedUsers = { ...defaultUsers, ...parsedUsers };
+      return mergedUsers;
+    }
+    return getDefaultUsers();
   } catch (error) {
     console.error('Error cargando usuarios:', error);
     return getDefaultUsers();
@@ -26,18 +33,33 @@ const saveUsersToStorage = (users) => {
   }
 };
 
-const getDefaultUsers = () => {
-  const defaultUsers = {
-    admin: {
+const getDefaultUsersOnly = () => {
+  const salt1 = 'admin_salt';
+  const salt2 = 'cajero_salt';
+  return {
+    'admin@santandereano.com': {
       email: 'admin@santandereano.com',
-      password: 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3',
+      password: simpleHash('hello', salt1),
       role: 'dueño',
       name: 'Administrador',
-      salt: 'admin_salt',
+      salt: salt1,
+      active: true,
+      createdAt: new Date().toISOString()
+    },
+    'administrivocaja@santandereano.com': {
+      email: 'administrivocaja@santandereano.com',
+      password: simpleHash('1010230caja', salt2),
+      role: 'cajera',
+      name: 'Cajero Principal',
+      salt: salt2,
       active: true,
       createdAt: new Date().toISOString()
     }
   };
+};
+
+const getDefaultUsers = () => {
+  const defaultUsers = getDefaultUsersOnly();
   saveUsersToStorage(defaultUsers);
   return defaultUsers;
 };
@@ -116,8 +138,8 @@ const MENU_DATA = {
   },
   gallina: {
     productos: [
-      { name: '1/2 Gallina Asada', price: 45000 },
-      { name: 'Gallina Entera', price: 90000 },
+      { name: '1/2 Gallina Asada', price: 40000 },
+      { name: 'Gallina Entera', price: 80000 },
       { name: 'Pierna Pernil', price: 18000 },
       { name: 'Pechuga', price: 18000 },
       { name: 'Rabadilla', price: 18000 },
@@ -126,7 +148,7 @@ const MENU_DATA = {
     terminos: ['Jugoso', '3/4', 'Bien cocido']
   },
   sopas: {
-    price: 9000, // Precio fijo
+    price: 10000, // Precio fijo
     sabores: [] // Se cargará dinámicamente desde localStorage
   },
   bebidas: {
@@ -181,15 +203,34 @@ export default function SantandereanoSystem() {
   const [showRegister, setShowRegister] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
 
-  // Cargar usuario desde localStorage al iniciar
+  // Cargar usuario desde sessionStorage al iniciar (cada pestaña tiene su propia sesión)
   React.useEffect(() => {
-    const savedUser = localStorage.getItem('santandereano_current_user');
+    const savedUser = sessionStorage.getItem('santandereano_current_user');
     if (savedUser) {
       try {
-        setCurrentUser(JSON.parse(savedUser));
+        const userData = JSON.parse(savedUser);
+        const users = getUsersFromStorage();
+        const userInDB = users[userData.email];
+        
+        console.log('=== VALIDACIÓN SESIÓN ===');
+        console.log('Email:', userData.email);
+        console.log('Usuario en DB:', userInDB ? 'Encontrado' : 'NO encontrado');
+        console.log('Rol guardado:', userData.role);
+        console.log('Rol en DB:', userInDB?.role);
+        
+        // Validar que el usuario existe y el rol coincide
+        if (userInDB && userInDB.active && userInDB.role === userData.role) {
+          console.log('✅ Sesión válida');
+          setCurrentUser(userData);
+        } else {
+          // Si el rol no coincide o el usuario no existe, cerrar sesión
+          console.warn('❌ Sesión inválida - cerrando sesión');
+          sessionStorage.removeItem('santandereano_current_user');
+          setCurrentUser(null);
+        }
       } catch (error) {
         console.error('Error cargando usuario:', error);
-        localStorage.removeItem('santandereano_current_user');
+        sessionStorage.removeItem('santandereano_current_user');
       }
     }
     
@@ -252,7 +293,7 @@ export default function SantandereanoSystem() {
     if (user && user.active && verifyPassword(password, user.password, user.salt)) {
       const userData = { email, ...user };
       setCurrentUser(userData);
-      localStorage.setItem('santandereano_current_user', JSON.stringify(userData));
+      sessionStorage.setItem('santandereano_current_user', JSON.stringify(userData));
       
       setLoginAttempts(0);
       localStorage.removeItem('login_attempts');
@@ -324,7 +365,7 @@ export default function SantandereanoSystem() {
     setEmail('');
     setPassword('');
     setRole('mesero');
-    localStorage.removeItem('santandereano_current_user');
+    sessionStorage.removeItem('santandereano_current_user');
   };
 
   if (!currentUser) {
@@ -615,7 +656,7 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
   );
 }
 
-// Paleta de colores predefinidos para meseros
+// Paleta de colores predefinidos para meseros (sin verde para evitar confusión con mesas disponibles)
 const MESERO_COLORS = {
   blue: {
     bg: 'bg-blue-600/30',
@@ -626,16 +667,6 @@ const MESERO_COLORS = {
     borderLight: 'border-blue-600/50',
     shadowLight: 'shadow-blue-600/10',
     textLight: 'text-blue-400'
-  },
-  green: {
-    bg: 'bg-green-600/30',
-    border: 'border-green-600',
-    shadow: 'shadow-green-600/20',
-    text: 'text-green-300',
-    bgLight: 'bg-green-600/10',
-    borderLight: 'border-green-600/50',
-    shadowLight: 'shadow-green-600/10',
-    textLight: 'text-green-400'
   },
   purple: {
     bg: 'bg-purple-600/30',
@@ -707,21 +738,39 @@ const MESERO_COLORS = {
     shadowLight: 'shadow-cyan-600/10',
     textLight: 'text-cyan-400'
   },
-  red: {
-    bg: 'bg-red-600/30',
-    border: 'border-red-600',
-    shadow: 'shadow-red-600/20',
-    text: 'text-red-300',
-    bgLight: 'bg-red-600/10',
-    borderLight: 'border-red-600/50',
-    shadowLight: 'shadow-red-600/10',
-    textLight: 'text-red-400'
+  rose: {
+    bg: 'bg-rose-600/30',
+    border: 'border-rose-600',
+    shadow: 'shadow-rose-600/20',
+    text: 'text-rose-300',
+    bgLight: 'bg-rose-600/10',
+    borderLight: 'border-rose-600/50',
+    shadowLight: 'shadow-rose-600/10',
+    textLight: 'text-rose-400'
+  },
+  amber: {
+    bg: 'bg-amber-600/30',
+    border: 'border-amber-600',
+    shadow: 'shadow-amber-600/20',
+    text: 'text-amber-300',
+    bgLight: 'bg-amber-600/10',
+    borderLight: 'border-amber-600/50',
+    shadowLight: 'shadow-amber-600/10',
+    textLight: 'text-amber-400'
   }
 };
 
 // Generar color único para cada mesero basado en su email
-const generateMeseroColor = (email) => {
+const generateMeseroColor = (email: string) => {
   const colorKeys = Object.keys(MESERO_COLORS);
+  const users = getUsersFromStorage();
+  const meseros = Object.values(users).filter((u: any) => u.role === 'mesero');
+  const meseroIndex = meseros.findIndex((m: any) => m.email === email);
+  
+  if (meseroIndex !== -1) {
+    return colorKeys[meseroIndex % colorKeys.length];
+  }
+  
   let hash = 0;
   for (let i = 0; i < email.length; i++) {
     hash = email.charCodeAt(i) + ((hash << 5) - hash);
@@ -730,11 +779,11 @@ const generateMeseroColor = (email) => {
 };
 
 // Obtener configuración de color del mesero
-const getMeseroColorConfig = (meseroName) => {
+const getMeseroColorConfig = (meseroName: string) => {
   const users = getUsersFromStorage();
-  const mesero = Object.values(users).find(user => user.name === meseroName);
-  const colorKey = mesero ? generateMeseroColor(mesero.email) : 'green';
-  return MESERO_COLORS[colorKey] || MESERO_COLORS.green;
+  const mesero = Object.values(users).find((user: any) => user.name === meseroName);
+  const colorKey = mesero ? generateMeseroColor(mesero.email) : 'blue';
+  return MESERO_COLORS[colorKey] || MESERO_COLORS.blue;
 };
 
 function MeseroDashboard({ user, onLogout }) {
@@ -745,6 +794,7 @@ function MeseroDashboard({ user, onLogout }) {
   const [historialVentas, setHistorialVentas] = useState([]);
   const [mostrarCobro, setMostrarCobro] = useState(false);
   const [saboresSopas, setSaboresSopas] = useState([]);
+  const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
 
   // Funciones de persistencia
   const cargarDatos = () => {
@@ -766,6 +816,12 @@ function MeseroDashboard({ user, onLogout }) {
         const saboresDefault = ['Sopa de costilla', 'Sancocho'];
         setSaboresSopas(saboresDefault);
         localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(saboresDefault));
+      }
+      
+      // Cargar precio de sopas desde localStorage
+      const precioGuardado = localStorage.getItem('santandereano_precio_sopas');
+      if (precioGuardado) {
+        setPrecioSopas(parseInt(precioGuardado));
       }
     } catch (error) {
       console.error('Error cargando datos:', error);
@@ -864,24 +920,24 @@ function MeseroDashboard({ user, onLogout }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       {/* Header */}
       <div className="bg-white/5 backdrop-blur-md border-b border-red-900/20 sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center">
-                <UtensilsCrossed className="w-6 h-6 text-white" />
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center">
+                <UtensilsCrossed className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">
+                <h1 className="text-base sm:text-xl font-bold text-white">
                   Santandereano SAS
                 </h1>
-                <p className="text-sm text-red-300">
+                <p className="text-xs sm:text-sm text-red-300 hidden sm:block">
                   Panel de Mesero
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white">{user.name}</p>
                 <p className="text-xs text-gray-400">Mesero</p>
               </div>
@@ -898,25 +954,25 @@ function MeseroDashboard({ user, onLogout }) {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 space-y-6">
+      <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-3 sm:space-y-6">
         {/* Selector de Pisos */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4">
+          <CardContent className="p-3 sm:p-6">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {PISOS.map((piso) => (
                 <Button
                   key={piso.number}
                   onClick={() => setPisoActual(piso.number)}
                   variant={pisoActual === piso.number ? "default" : "outline"}
-                  className={`flex-1 py-6 px-6 rounded-xl font-medium transition-all duration-300 ${
+                  className={`flex-1 py-4 sm:py-6 px-3 sm:px-6 rounded-xl font-medium transition-all duration-300 ${
                     pisoActual === piso.number
                       ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/30'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 border-red-900/20'
                   }`}
                 >
                   <div className="text-center">
-                    <p className="text-lg font-bold">Piso {piso.number}</p>
-                    <p className="text-sm opacity-80">{piso.mesas} mesas</p>
+                    <p className="text-base sm:text-lg font-bold">Piso {piso.number}</p>
+                    <p className="text-xs sm:text-sm opacity-80">{piso.mesas} mesas</p>
                   </div>
                 </Button>
               ))}
@@ -926,18 +982,18 @@ function MeseroDashboard({ user, onLogout }) {
 
         {/* Leyenda de Colores */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-green-600/20 border border-green-600 rounded"></div>
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm">
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-600/20 border border-green-600 rounded"></div>
                 <span className="text-gray-300">Disponible</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-blue-600/30 border border-blue-600 rounded"></div>
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-600/30 border border-blue-600 rounded"></div>
                 <span className="text-gray-300">Mi Mesa</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-purple-600/10 border border-purple-600/50 rounded"></div>
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-purple-600/10 border border-purple-600/50 rounded"></div>
                 <span className="text-gray-300">Otro Mesero</span>
               </div>
             </div>
@@ -946,11 +1002,11 @@ function MeseroDashboard({ user, onLogout }) {
 
         {/* Grid de Mesas */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
-          <CardHeader>
-            <CardTitle className="text-white">Mesas - Piso {pisoActual}</CardTitle>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-base sm:text-lg text-white">Mesas - Piso {pisoActual}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <CardContent className="p-2 sm:p-6">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4">
               {Array.from({ length: mesasDelPiso }, (_, i) => {
                 const numeroMesa = i + 1;
                 const mesaKey = `${pisoActual}-${numeroMesa}`;
@@ -983,21 +1039,21 @@ function MeseroDashboard({ user, onLogout }) {
                     variant="outline"
                     className={clasesMesa}
                   >
-                    <UtensilsCrossed className="w-6 h-6 mb-2" />
-                    <p className="text-lg font-bold">{numeroMesa}</p>
-                    <p className="text-xs">
+                    <UtensilsCrossed className="w-4 h-4 sm:w-6 sm:h-6 mb-1 sm:mb-2" />
+                    <p className="text-base sm:text-lg font-bold">{numeroMesa}</p>
+                    <p className="text-[10px] sm:text-xs leading-tight">
                       {ocupada ? (
-                        esMiMesa ? 'Mi Mesa' : `${meseroAsignado}`
-                      ) : 'Disponible'}
+                        esMiMesa ? 'Mi Mesa' : `${meseroAsignado.split(' ')[0]}`
+                      ) : 'Libre'}
                     </p>
                     {ocupada && mesaData.total && (
-                      <p className="text-xs font-medium mt-1">
+                      <p className="text-[10px] sm:text-xs font-medium mt-0.5 sm:mt-1">
                         ${mesaData.total.toLocaleString()}
                       </p>
                     )}
                     {ocupada && !esMiMesa && (
-                      <p className="text-xs opacity-60 mt-1">
-                        🔒 Otro mesero
+                      <p className="text-[9px] sm:text-xs opacity-60 mt-0.5 sm:mt-1">
+                        🔒
                       </p>
                     )}
                   </Button>
@@ -1019,6 +1075,7 @@ function MeseroDashboard({ user, onLogout }) {
           onAbrirCobro={abrirCobro}
           user={user}
           saboresSopas={saboresSopas}
+          precioSopas={precioSopas}
         />
       )}
 
@@ -1037,28 +1094,865 @@ function MeseroDashboard({ user, onLogout }) {
 }
 
 function CajeraDashboard({ user, onLogout }) {
+  const [ventasHoy, setVentasHoy] = useState([]);
+  const [saboresSopas, setSaboresSopas] = useState([]);
+  const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
+  const [nuevoSabor, setNuevoSabor] = useState('');
+  const [mostrarAgregarSabor, setMostrarAgregarSabor] = useState(false);
+  const [filtroFecha, setFiltroFecha] = useState('hoy');
+  const [busquedaMesa, setBusquedaMesa] = useState('');
+  const [mostrarDetalleVenta, setMostrarDetalleVenta] = useState(null);
+  const [cajaAbierta, setCajaAbierta] = useState(false);
+  const [fechaApertura, setFechaApertura] = useState(null);
+  const [mostrarReporte, setMostrarReporte] = useState(false);
+  const [reporteCierre, setReporteCierre] = useState(null);
+
+  // Cargar datos al inicializar y sincronizar cada 2 segundos
+  React.useEffect(() => {
+    cargarDatos();
+    const estadoCaja = localStorage.getItem('santandereano_caja_estado');
+    if (estadoCaja) {
+      const estado = JSON.parse(estadoCaja);
+      setCajaAbierta(estado.abierta);
+      setFechaApertura(estado.fechaApertura);
+    }
+    
+    // Sincronizar ventas cada 2 segundos
+    const interval = setInterval(() => {
+      cargarDatos();
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const cargarDatos = () => {
+    try {
+      const ventasGuardadas = localStorage.getItem('santandereano_ventas');
+      const saboresGuardados = localStorage.getItem('santandereano_sabores_sopas');
+      
+      if (ventasGuardadas) {
+        setVentasHoy(JSON.parse(ventasGuardadas));
+      }
+      
+      if (saboresGuardados) {
+        setSaboresSopas(JSON.parse(saboresGuardados));
+      } else {
+        const saboresDefault = ['Sopa de costilla', 'Sancocho'];
+        setSaboresSopas(saboresDefault);
+        localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(saboresDefault));
+      }
+      
+      // Cargar precio de sopas desde localStorage
+      const precioGuardado = localStorage.getItem('santandereano_precio_sopas');
+      if (precioGuardado) {
+        setPrecioSopas(parseInt(precioGuardado));
+      }
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+    }
+  };
+
+  const abrirCaja = () => {
+    const ahora = new Date().toISOString();
+    setCajaAbierta(true);
+    setFechaApertura(ahora);
+    localStorage.setItem('santandereano_caja_estado', JSON.stringify({
+      abierta: true,
+      fechaApertura: ahora,
+      cajero: user.name
+    }));
+    alert(`✅ Caja abierta exitosamente\nCajero: ${user.name}\nHora: ${new Date(ahora).toLocaleString()}`);
+  };
+
+  const cerrarCaja = () => {
+    const ventasDelDia = filtrarVentasDelDia();
+    const reporte = generarReporte(ventasDelDia);
+    setReporteCierre(reporte);
+    setMostrarReporte(true);
+  };
+
+  const confirmarCierreCaja = () => {
+    // Guardar reporte en historial
+    const historialReportes = JSON.parse(localStorage.getItem('santandereano_historial_cierres') || '[]');
+    historialReportes.push({
+      ...reporteCierre,
+      id: Date.now()
+    });
+    localStorage.setItem('santandereano_historial_cierres', JSON.stringify(historialReportes));
+    
+    setCajaAbierta(false);
+    setFechaApertura(null);
+    setMostrarReporte(false);
+    setReporteCierre(null);
+    localStorage.setItem('santandereano_caja_estado', JSON.stringify({
+      abierta: false,
+      fechaApertura: null
+    }));
+    
+    alert('✅ Caja cerrada exitosamente. El reporte ha sido guardado.');
+  };
+
+  const filtrarVentasDelDia = () => {
+    if (!fechaApertura) return [];
+    const inicioTurno = new Date(fechaApertura);
+    return ventasHoy.filter(venta => {
+      const fechaVenta = new Date(venta.fecha);
+      return fechaVenta >= inicioTurno;
+    });
+  };
+
+  const generarReporte = (ventas) => {
+    const total = ventas.reduce((sum, venta) => sum + venta.total, 0);
+    const porMetodo = ventas.reduce((acc, venta) => {
+      const metodo = venta.metodoPago || 'efectivo';
+      acc[metodo] = (acc[metodo] || 0) + venta.total;
+      return acc;
+    }, {});
+    
+    // Análisis por categorías y productos
+    const categorias = {
+      'Picadas': { cantidad: 0, ingresos: 0, productos: {} },
+      'Gallina': { cantidad: 0, ingresos: 0, productos: {} },
+      'Sopas': { cantidad: 0, ingresos: 0, productos: {} },
+      'Bebidas': { cantidad: 0, ingresos: 0, productos: {} },
+      'Adicionales': { cantidad: 0, ingresos: 0, productos: {} }
+    };
+    
+    ventas.forEach(venta => {
+      venta.pedidos?.forEach(pedido => {
+        const cantidad = pedido.cantidad;
+        const precio = pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem;
+        const subtotal = cantidad * precio;
+        
+        let categoria = '';
+        let nombreProducto = '';
+        
+        if (pedido.tipo === 'picada') {
+          categoria = 'Picadas';
+          nombreProducto = `Picada ${pedido.size}`;
+        } else if (pedido.tipo === 'gallina') {
+          categoria = 'Gallina';
+          nombreProducto = pedido.nombre;
+        } else if (pedido.tipo === 'sopa') {
+          categoria = 'Sopas';
+          nombreProducto = pedido.nombre;
+        } else if (pedido.tipo === 'bebida') {
+          categoria = 'Bebidas';
+          nombreProducto = pedido.nombre;
+        } else if (pedido.tipo === 'adicional') {
+          categoria = 'Adicionales';
+          nombreProducto = pedido.nombre;
+        }
+        
+        if (categoria && categorias[categoria]) {
+          categorias[categoria].cantidad += cantidad;
+          categorias[categoria].ingresos += subtotal;
+          
+          if (!categorias[categoria].productos[nombreProducto]) {
+            categorias[categoria].productos[nombreProducto] = {
+              cantidad: 0,
+              ingresos: 0,
+              precioUnitario: precio
+            };
+          }
+          categorias[categoria].productos[nombreProducto].cantidad += cantidad;
+          categorias[categoria].productos[nombreProducto].ingresos += subtotal;
+        }
+      });
+    });
+    
+    // Calcular porcentajes
+    Object.keys(categorias).forEach(cat => {
+      categorias[cat].porcentaje = total > 0 ? ((categorias[cat].ingresos / total) * 100).toFixed(1) : 0;
+    });
+    
+    return {
+      fecha: new Date().toLocaleString(),
+      turnoInicio: new Date(fechaApertura).toLocaleString(),
+      turnoFin: new Date().toLocaleString(),
+      totalVentas: total,
+      cantidadOrdenes: ventas.length,
+      ventasPorMetodo: porMetodo,
+      cajero: user.name,
+      categorias: categorias
+    };
+  };
+
+  const agregarSabor = () => {
+    if (!nuevoSabor.trim()) {
+      alert('Ingrese un nombre para el sabor');
+      return;
+    }
+    
+    if (saboresSopas.includes(nuevoSabor.trim())) {
+      alert('Este sabor ya existe');
+      return;
+    }
+    
+    const nuevosSabores = [...saboresSopas, nuevoSabor.trim()];
+    setSaboresSopas(nuevosSabores);
+    localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(nuevosSabores));
+    setNuevoSabor('');
+    setMostrarAgregarSabor(false);
+  };
+
+  const eliminarSabor = (sabor) => {
+    if (confirm(`¿Está seguro de eliminar "${sabor}"?`)) {
+      const nuevosSabores = saboresSopas.filter(s => s !== sabor);
+      setSaboresSopas(nuevosSabores);
+      localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(nuevosSabores));
+    }
+  };
+
+  const filtrarVentas = () => {
+    const hoy = new Date();
+    const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    
+    return ventasHoy.filter(venta => {
+      const fechaVenta = new Date(venta.fecha);
+      const coincideMesa = busquedaMesa === '' || venta.mesa.toLowerCase().includes(busquedaMesa.toLowerCase());
+      
+      switch (filtroFecha) {
+        case 'hoy':
+          return fechaVenta >= inicioHoy && coincideMesa;
+        case 'semana':
+          const inicioSemana = new Date(inicioHoy);
+          inicioSemana.setDate(inicioSemana.getDate() - 7);
+          return fechaVenta >= inicioSemana && coincideMesa;
+        case 'mes':
+          const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+          return fechaVenta >= inicioMes && coincideMesa;
+        default:
+          return coincideMesa;
+      }
+    });
+  };
+
+  // Mostrar solo ventas del turno actual si la caja está abierta
+  const ventasFiltradas = cajaAbierta ? filtrarVentasDelDia() : filtrarVentas();
+  const totalVentas = ventasFiltradas.reduce((sum, venta) => sum + venta.total, 0);
+  const ventasPorMetodo = ventasFiltradas.reduce((acc, venta) => {
+    const metodo = venta.metodoPago || 'efectivo';
+    acc[metodo] = (acc[metodo] || 0) + venta.total;
+    return acc;
+  }, {});
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
-      <div className="container mx-auto px-4 py-8">
-        <Card className="bg-white/10 backdrop-blur-md border-red-900/20">
+      {/* Header */}
+      <div className="bg-white/5 backdrop-blur-md border-b border-red-900/20 sticky top-0 z-40">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-800 rounded-full flex items-center justify-center">
+                <Calculator className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">
+                  Santandereano SAS
+                </h1>
+                <p className="text-sm text-green-300">
+                  Panel de Caja
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-sm font-medium text-white">{user.name}</p>
+                <p className="text-xs text-gray-400">Caja</p>
+              </div>
+              <Button
+                onClick={onLogout}
+                variant="outline"
+                size="sm"
+                className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6 space-y-6">
+        {/* Botones de Apertura/Cierre de Caja */}
+        <Card className={`border-2 shadow-xl ${
+          cajaAbierta 
+            ? 'bg-green-50 border-green-500' 
+            : 'bg-red-50 border-red-500'
+        }`}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                  cajaAbierta ? 'bg-green-500' : 'bg-red-500'
+                }`}>
+                  {cajaAbierta ? (
+                    <span className="text-3xl">🔓</span>
+                  ) : (
+                    <span className="text-3xl">🔒</span>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {cajaAbierta ? 'Caja Abierta' : 'Caja Cerrada'}
+                  </h3>
+                  {cajaAbierta ? (
+                    <div className="text-sm text-gray-700 space-y-1">
+                      <p>📅 Apertura: {new Date(fechaApertura).toLocaleString()}</p>
+                      <p>💰 Ventas del turno: {filtrarVentasDelDia().length} órdenes</p>
+                      <p>💵 Total acumulado: ${filtrarVentasDelDia().reduce((sum, v) => sum + v.total, 0).toLocaleString()}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">Debe abrir la caja para comenzar a registrar ventas</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                {!cajaAbierta ? (
+                  <Button
+                    onClick={abrirCaja}
+                    className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 text-lg font-semibold shadow-lg"
+                  >
+                    🔓 Abrir Caja
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={cerrarCaja}
+                    disabled={filtrarVentasDelDia().length === 0}
+                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 text-lg font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    🔒 Cerrar Caja y Ver Reporte
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Estadísticas Rápidas - Solo ventas del turno actual */}
+        {cajaAbierta && (
+          <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-4 mb-4">
+            <p className="text-blue-800 font-semibold text-center">
+              📊 Mostrando solo ventas del turno actual (desde {new Date(fechaApertura).toLocaleTimeString()})
+            </p>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <Card className="bg-white/90 border-green-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-700 text-sm font-medium">{cajaAbierta ? 'Total Turno' : 'Total Ventas'}</p>
+                  <p className="text-3xl font-bold text-gray-900">${totalVentas.toLocaleString()}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/90 border-blue-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-700 text-sm font-medium">Órdenes</p>
+                  <p className="text-3xl font-bold text-gray-900">{ventasFiltradas.length}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                  <Receipt className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/90 border-purple-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-700 text-sm font-medium">Efectivo</p>
+                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo.efectivo || 0).toLocaleString()}</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
+                  <Banknote className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/90 border-orange-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-700 text-sm font-medium">Tarjeta</p>
+                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo.tarjeta || 0).toLocaleString()}</p>
+                </div>
+                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                  <CreditCard className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/90 border-pink-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-pink-700 text-sm font-medium">Nequi</p>
+                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo['transferencia - Nequi'] || 0).toLocaleString()}</p>
+                </div>
+                <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/90 border-red-500 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-700 text-sm font-medium">Daviplata</p>
+                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo['transferencia - Daviplata'] || 0).toLocaleString()}</p>
+                </div>
+                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Gestión de Sabores de Sopas */}
+        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardHeader>
-            <CardTitle className="text-white text-center">
-              Panel de Cajera - {user.name}
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white flex items-center">
+                <span className="text-2xl mr-2">🍲</span>
+                Gestión de Sopas
+              </CardTitle>
+              <Button
+                onClick={() => setMostrarAgregarSabor(true)}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Sabor
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30">
+              <div className="flex justify-between items-center">
+                <span className="text-white font-medium">Precio actual de sopas:</span>
+                <span className="text-2xl font-bold text-blue-400">${precioSopas.toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {saboresSopas.map((sabor, index) => (
+                <div key={index} className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-lg p-4 flex items-center justify-between">
+                  <span className="text-white font-medium">{sabor}</span>
+                  <Button
+                    onClick={() => eliminarSabor(sabor)}
+                    variant="outline"
+                    size="sm"
+                    className="w-8 h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Filtros y Búsqueda */}
+        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-4 items-center">
+              <div className="flex items-center space-x-2">
+                <label className="text-white font-medium">Período:</label>
+                <div className="flex space-x-2">
+                  {[
+                    { id: 'hoy', label: 'Hoy' },
+                    { id: 'semana', label: 'Semana' },
+                    { id: 'mes', label: 'Mes' },
+                    { id: 'todo', label: 'Todo' }
+                  ].map((periodo) => (
+                    <Button
+                      key={periodo.id}
+                      onClick={() => setFiltroFecha(periodo.id)}
+                      variant={filtroFecha === periodo.id ? "default" : "outline"}
+                      size="sm"
+                      className={filtroFecha === periodo.id 
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' 
+                        : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
+                      }
+                    >
+                      {periodo.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2 flex-1">
+                <label className="text-white font-medium">Buscar:</label>
+                <Input
+                  value={busquedaMesa}
+                  onChange={(e) => setBusquedaMesa(e.target.value)}
+                  placeholder="Buscar por mesa..."
+                  className="bg-white/5 border-red-500/30 text-white max-w-xs"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Lista de Ventas */}
+        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center justify-between">
+              <div className="flex items-center">
+                <Receipt className="w-5 h-5 mr-2 text-green-400" />
+                {cajaAbierta ? 'Ventas del Turno Actual' : 'Historial de Ventas'} ({ventasFiltradas.length})
+              </div>
+              <Badge className="bg-blue-500 text-white">
+                🔄 Actualización automática
+              </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-center text-gray-300">
-            <p>Próximamente...</p>
-            <Button 
-              onClick={onLogout}
-              variant="outline"
-              className="mt-4 border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Cerrar Sesión
-            </Button>
+          <CardContent>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {ventasFiltradas.length === 0 ? (
+                <div className="text-center py-12">
+                  <Clock className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-400">No hay ventas para mostrar</p>
+                </div>
+              ) : (
+                ventasFiltradas.map((venta) => (
+                  <div key={venta.id} className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 rounded-lg p-4 border border-red-500/20 hover:border-red-500/40 transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                            <UtensilsCrossed className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-white font-semibold">Mesa {venta.mesa}</p>
+                            <p className="text-gray-400 text-sm">
+                              {new Date(venta.fecha).toLocaleString()} • {venta.mesero}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-green-400">${venta.total.toLocaleString()}</p>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <Badge className={`text-xs ${
+                            venta.metodoPago === 'efectivo' ? 'bg-green-500/20 text-green-400' :
+                            venta.metodoPago === 'tarjeta' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-purple-500/20 text-purple-400'
+                          }`}>
+                            {venta.metodoPago}
+                          </Badge>
+                          <Button
+                            onClick={() => setMostrarDetalleVenta(venta)}
+                            variant="outline"
+                            size="sm"
+                            className="border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white"
+                          >
+                            Ver Detalle
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal Agregar Sabor */}
+      {mostrarAgregarSabor && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30">
+            <CardHeader>
+              <CardTitle className="text-white">Agregar Nuevo Sabor</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-red-300 mb-2">Nombre del Sabor</label>
+                <Input
+                  value={nuevoSabor}
+                  onChange={(e) => setNuevoSabor(e.target.value)}
+                  placeholder="Ej: Sopa de mondongo"
+                  className="bg-white/5 border-red-500/30 text-white"
+                  onKeyPress={(e) => e.key === 'Enter' && agregarSabor()}
+                />
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={() => setMostrarAgregarSabor(false)}
+                  variant="outline"
+                  className="flex-1 border-gray-600 text-gray-400"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={agregarSabor}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                >
+                  Agregar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal Detalle de Venta */}
+      {mostrarDetalleVenta && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30">
+            <CardHeader className="border-b border-red-500/30">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white">Detalle de Venta - Mesa {mostrarDetalleVenta.mesa}</CardTitle>
+                <Button
+                  onClick={() => setMostrarDetalleVenta(null)}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 overflow-y-auto">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-400">Fecha:</p>
+                    <p className="text-white font-medium">{new Date(mostrarDetalleVenta.fecha).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Mesero:</p>
+                    <p className="text-white font-medium">{mostrarDetalleVenta.mesero}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Método de Pago:</p>
+                    <p className="text-white font-medium">{mostrarDetalleVenta.metodoPago}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Total:</p>
+                    <p className="text-green-400 font-bold text-lg">${mostrarDetalleVenta.total.toLocaleString()}</p>
+                  </div>
+                </div>
+                
+                <Separator className="bg-red-500/20" />
+                
+                <div>
+                  <h4 className="text-white font-semibold mb-3">Productos:</h4>
+                  <div className="space-y-2">
+                    {mostrarDetalleVenta.pedidos?.map((pedido, index) => (
+                      <div key={index} className="flex justify-between items-center bg-white/5 rounded-lg p-3">
+                        <div>
+                          <p className="text-white font-medium">
+                            {pedido.cantidad}x {pedido.tipo === 'picada' ? `Picada ${pedido.size}` : pedido.nombre}
+                          </p>
+                          {pedido.tipo === 'picada' && (
+                            <p className="text-gray-400 text-sm">
+                              {pedido.carnes?.join(', ')} • {pedido.termino}
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-green-400 font-bold">
+                          ${((pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem) * pedido.cantidad).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {mostrarDetalleVenta.notaAdicional && (
+                  <div>
+                    <h4 className="text-white font-semibold mb-2">Nota Adicional:</h4>
+                    <p className="text-gray-300 bg-white/5 rounded-lg p-3">{mostrarDetalleVenta.notaAdicional}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal Reporte de Cierre */}
+      {mostrarReporte && reporteCierre && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden bg-white shadow-2xl">
+            <CardHeader className="bg-red-600 text-white">
+              <CardTitle className="text-center">📊 Reporte General de Ventas - Cierre de Caja</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 overflow-y-auto max-h-[calc(95vh-100px)]">
+              <div className="space-y-6">
+                {/* Balance General */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-lg font-bold text-blue-800 mb-3">📊 Balance General del Día</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600">Cajero:</p>
+                      <p className="font-semibold text-gray-900">{reporteCierre.cajero}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Apertura:</p>
+                      <p className="font-semibold text-gray-900">{reporteCierre.turnoInicio}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Cierre:</p>
+                      <p className="font-semibold text-gray-900">{reporteCierre.turnoFin}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Transacciones:</p>
+                      <p className="font-semibold text-gray-900">{reporteCierre.cantidadOrdenes}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 bg-green-100 rounded border border-green-300">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold text-green-800">Ingresos Totales:</span>
+                      <span className="text-3xl font-bold text-green-600">${reporteCierre.totalVentas.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ventas por Categorías */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-3">🏷️ Ventas por Categorías</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(reporteCierre.categorias).map(([categoria, datos]: [string, any]) => (
+                      datos.cantidad > 0 && (
+                        <div key={categoria} className="bg-gray-50 p-4 rounded-lg border">
+                          <h4 className="font-semibold text-gray-800 mb-2">{categoria}</h4>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span>Cantidad:</span>
+                              <span className="font-medium">{datos.cantidad}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Ingresos:</span>
+                              <span className="font-medium text-green-600">${datos.ingresos.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Participación:</span>
+                              <span className="font-medium text-blue-600">{datos.porcentaje}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                {/* Detalle por Productos */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-3">🍽️ Detalle por Productos</h3>
+                  <div className="space-y-4">
+                    {Object.entries(reporteCierre.categorias).map(([categoria, datos]: [string, any]) => (
+                      datos.cantidad > 0 && (
+                        <div key={categoria} className="border rounded-lg p-4">
+                          <h4 className="font-semibold text-gray-800 mb-3 bg-gray-100 p-2 rounded">{categoria}</h4>
+                          <div className="grid gap-2">
+                            {Object.entries(datos.productos).map(([producto, info]: [string, any]) => (
+                              <div key={producto} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
+                                <div>
+                                  <span className="font-medium">{producto}</span>
+                                  <span className="text-gray-500 text-sm ml-2">(${info.precioUnitario.toLocaleString()} c/u)</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-medium">Cant: {info.cantidad}</div>
+                                  <div className="text-green-600 font-semibold">${info.ingresos.toLocaleString()}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                {/* Métodos de Pago */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-3">💳 Métodos de Pago</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries(reporteCierre.ventasPorMetodo).map(([metodo, monto]) => (
+                      <div key={metodo} className="bg-gray-50 p-4 rounded-lg border">
+                        <div className="text-center">
+                          <p className="text-gray-600 capitalize text-sm">{metodo}</p>
+                          <p className="font-bold text-lg text-gray-900">${monto.toLocaleString()}</p>
+                          <p className="text-xs text-blue-600">
+                            {((monto / reporteCierre.totalVentas) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resumen de Bebidas vs Alimentos */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-3">🍺 Resumen Bebidas vs Alimentos</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h4 className="font-semibold text-blue-800">Bebidas</h4>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {reporteCierre.categorias.Bebidas?.cantidad || 0}
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        ${(reporteCierre.categorias.Bebidas?.ingresos || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                      <h4 className="font-semibold text-orange-800">Alimentos</h4>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {(reporteCierre.categorias.Picadas?.cantidad || 0) + 
+                         (reporteCierre.categorias.Gallina?.cantidad || 0) + 
+                         (reporteCierre.categorias.Sopas?.cantidad || 0) + 
+                         (reporteCierre.categorias.Adicionales?.cantidad || 0)}
+                      </p>
+                      <p className="text-sm text-orange-600">
+                        ${((reporteCierre.categorias.Picadas?.ingresos || 0) + 
+                           (reporteCierre.categorias.Gallina?.ingresos || 0) + 
+                           (reporteCierre.categorias.Sopas?.ingresos || 0) + 
+                           (reporteCierre.categorias.Adicionales?.ingresos || 0)).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3 pt-4 border-t">
+                  <Button
+                    onClick={() => setMostrarReporte(false)}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={confirmarCierreCaja}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Confirmar Cierre
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -1090,7 +1984,7 @@ function DueñoDashboard({ user, onLogout }) {
   );
 }
 
-function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, saboresSopas }) {
+function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, saboresSopas, precioSopas }) {
   const mesaKey = `${pisoActual}-${mesaSeleccionada}`;
   const mesaData = mesas[mesaKey] || { pedidos: [], total: 0, mesero: user.name };
   const [pedidos, setPedidos] = useState(mesaData.pedidos || []);
@@ -1220,7 +2114,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
     agregarPedido({
       tipo: 'sopa',
       nombre: saborSeleccionado,
-      precioItem: MENU_DATA.sopas.price
+      precioItem: precioSopas
     });
   };
 
@@ -1267,18 +2161,18 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-7xl max-h-[95vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30 shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+      <Card className="w-full max-w-7xl max-h-[98vh] sm:max-h-[95vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30 shadow-2xl">
         {/* Header */}
-        <CardHeader className="border-b border-red-500/30 bg-gradient-to-r from-red-600/20 to-red-800/20">
+        <CardHeader className="border-b border-red-500/30 bg-gradient-to-r from-red-600/20 to-red-800/20 p-3 sm:p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center">
-                <UtensilsCrossed className="w-5 h-5 text-white" />
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center">
+                <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <CardTitle className="text-white text-xl">Mesa {mesaSeleccionada}</CardTitle>
-                <p className="text-red-300 text-sm">Piso {pisoActual} • {user.name}</p>
+                <CardTitle className="text-white text-base sm:text-xl">Mesa {mesaSeleccionada}</CardTitle>
+                <p className="text-red-300 text-xs sm:text-sm">Piso {pisoActual} • {user.name}</p>
               </div>
             </div>
             <Button
@@ -1293,33 +2187,33 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
         </CardHeader>
         
         <CardContent className="p-0 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-3 h-[calc(95vh-120px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 h-[calc(98vh-80px)] sm:h-[calc(95vh-120px)]">
             {/* Panel de Categorías */}
-            <div className="lg:col-span-2 p-6 overflow-y-auto border-r border-red-500/20">
+            <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto border-r border-red-500/20">
               {/* Selector de Categorías */}
-              <div className="grid grid-cols-5 gap-3 mb-6">
+              <div className="grid grid-cols-5 gap-1.5 sm:gap-3 mb-4 sm:mb-6">
                 {categorias.map((categoria) => (
                   <Button
                     key={categoria.id}
                     onClick={() => setCategoriaActual(categoria.id)}
-                    className={`h-20 flex flex-col items-center justify-center space-y-1 transition-all duration-300 transform hover:scale-105 ${
+                    className={`h-14 sm:h-20 flex flex-col items-center justify-center space-y-0.5 sm:space-y-1 transition-all duration-300 transform hover:scale-105 ${
                       categoriaActual === categoria.id
                         ? `bg-gradient-to-br ${categoria.color} text-white shadow-lg`
                         : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
                     }`}
                   >
-                    <span className="text-2xl">{categoria.icono}</span>
-                    <span className="text-xs font-medium">{categoria.nombre}</span>
+                    <span className="text-xl sm:text-2xl">{categoria.icono}</span>
+                    <span className="text-[10px] sm:text-xs font-medium">{categoria.nombre}</span>
                   </Button>
                 ))}
               </div>
 
               {/* Contenido por Categoría */}
-              <div className="space-y-6">
+              <div className="space-y-3 sm:space-y-6">
                 {categoriaActual === 'picadas' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🥩</span> Configurar Picada
+                  <div className="space-y-3 sm:space-y-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">🥩</span> Configurar Picada
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1441,7 +2335,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                 {categoriaActual === 'sopas' && (
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                      <span className="text-2xl mr-2">🍲</span> Sopas - $9.000
+                      <span className="text-2xl mr-2">🍲</span> Sopas - ${precioSopas.toLocaleString()}
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1452,7 +2346,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                             agregarPedido({
                               tipo: 'sopa',
                               nombre: sabor,
-                              precioItem: MENU_DATA.sopas.price
+                              precioItem: precioSopas
                             });
                           }}
                           className="h-14 text-left p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-green-500 hover:to-green-600 hover:text-white transition-all duration-200"
@@ -1545,24 +2439,24 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
             </div>
 
             {/* Panel de Pedido */}
-            <div className="p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50">
-              <div className="space-y-4">
+            <div className="p-3 sm:p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-white">Pedido Actual</h3>
-                  <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                  <h3 className="text-base sm:text-lg font-semibold text-white">Pedido Actual</h3>
+                  <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs">
                     {pedidos.length} items
                   </Badge>
                 </div>
 
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="space-y-2 sm:space-y-3 max-h-[40vh] sm:max-h-96 overflow-y-auto">
                   {pedidos.length === 0 ? (
-                    <div className="text-center py-12">
-                      <UtensilsCrossed className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                      <p className="text-gray-400">No hay items en el pedido</p>
+                    <div className="text-center py-8 sm:py-12">
+                      <UtensilsCrossed className="w-10 h-10 sm:w-12 sm:h-12 text-gray-500 mx-auto mb-2 sm:mb-3" />
+                      <p className="text-gray-400 text-sm">No hay items</p>
                     </div>
                   ) : (
                     pedidos.map((pedido) => (
-                      <div key={pedido.id} className="bg-white/5 rounded-lg p-3 border border-red-500/20">
+                      <div key={pedido.id} className="bg-white/5 rounded-lg p-2 sm:p-3 border border-red-500/20">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-white font-medium text-sm">
@@ -1627,18 +2521,18 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
 
                 <Separator className="bg-red-500/20" />
 
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">
-                    <span className="text-lg font-semibold text-white">Total:</span>
-                    <span className="text-2xl font-bold text-green-400">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">
+                    <span className="text-base sm:text-lg font-semibold text-white">Total:</span>
+                    <span className="text-xl sm:text-2xl font-bold text-green-400">
                       ${calcularTotal(pedidos).toLocaleString()}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-2 sm:gap-3">
                     <Button
                       onClick={guardarPedido}
-                      className="h-12 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium"
+                      className="h-10 sm:h-12 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium text-sm sm:text-base"
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
                       Guardar Pedido
@@ -1661,7 +2555,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
                           setMesas(nuevasMesas);
                           onAbrirCobro();
                         }}
-                        className="h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium"
+                        className="h-10 sm:h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium text-sm sm:text-base"
                       >
                         <Send className="w-4 h-4 mr-2" />
                         Guardar y Cobrar

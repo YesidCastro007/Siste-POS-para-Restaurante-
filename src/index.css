@@ -103,3 +103,58 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Mobile optimizations */
+@layer utilities {
+  /* Prevent text selection on buttons for better mobile UX */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Smooth scrolling for mobile */
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Better tap targets for mobile */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 640px) {
+  /* Reduce motion for better performance on mobile */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Optimize font sizes for mobile readability */
+  html {
+    font-size: 14px;
+  }
+
+  /* Better touch targets */
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+}
