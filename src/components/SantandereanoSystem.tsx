@@ -551,6 +551,7 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
             </div>
 
             <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-white text-center mb-6">Bienvenido</h2>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Email
