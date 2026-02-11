@@ -2568,6 +2568,7 @@ function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, 
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
