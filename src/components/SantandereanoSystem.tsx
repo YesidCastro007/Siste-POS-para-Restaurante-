@@ -95,10 +95,6 @@ const createUser = (email, password, name) => {
     throw new Error('El email ya está registrado');
   }
   
-  if (!email.endsWith('@santandereano.com')) {
-    throw new Error('El email debe terminar en @santandereano.com');
-  }
-  
   if (!isValidEmail(email)) {
     throw new Error('Email inválido');
   }
@@ -203,6 +199,12 @@ export default function SantandereanoSystem() {
   const [showRegister, setShowRegister] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetStep, setResetStep] = useState(1);
 
   // Cargar usuario desde sessionStorage al iniciar (cada pestaña tiene su propia sesión)
   React.useEffect(() => {
@@ -361,6 +363,88 @@ export default function SantandereanoSystem() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (resetStep === 1) {
+      if (!resetEmail.trim() || !isValidEmail(resetEmail)) {
+        alert('Por favor ingrese un email válido');
+        return;
+      }
+      
+      const users = getUsersFromStorage();
+      if (!users[resetEmail]) {
+        alert('No existe una cuenta con este email');
+        return;
+      }
+      
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      localStorage.setItem('reset_code_' + resetEmail, code);
+      localStorage.setItem('reset_code_expiry_' + resetEmail, (Date.now() + 300000).toString());
+      
+      alert(`Código de recuperación: ${code}\n\n⚠️ En producción, este código se enviaría por email.\nTiene 5 minutos para usarlo.`);
+      setResetStep(2);
+    } else if (resetStep === 2) {
+      if (!resetCode.trim()) {
+        alert('Ingrese el código de recuperación');
+        return;
+      }
+      
+      const storedCode = localStorage.getItem('reset_code_' + resetEmail);
+      const expiry = localStorage.getItem('reset_code_expiry_' + resetEmail);
+      
+      if (!storedCode || Date.now() > parseInt(expiry)) {
+        alert('El código ha expirado. Solicite uno nuevo.');
+        setResetStep(1);
+        setResetCode('');
+        return;
+      }
+      
+      if (resetCode !== storedCode) {
+        alert('Código incorrecto');
+        return;
+      }
+      
+      setResetStep(3);
+    } else if (resetStep === 3) {
+      if (!newPassword.trim() || !confirmNewPassword.trim()) {
+        alert('Complete todos los campos');
+        return;
+      }
+      
+      if (newPassword.length < 6) {
+        alert('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+      
+      if (newPassword !== confirmNewPassword) {
+        alert('Las contraseñas no coinciden');
+        return;
+      }
+      
+      const users = getUsersFromStorage();
+      const salt = generateSalt();
+      const hashedPassword = simpleHash(newPassword, salt);
+      
+      users[resetEmail] = {
+        ...users[resetEmail],
+        password: hashedPassword,
+        salt
+      };
+      
+      saveUsersToStorage(users);
+      
+      localStorage.removeItem('reset_code_' + resetEmail);
+      localStorage.removeItem('reset_code_expiry_' + resetEmail);
+      
+      alert('✅ Contraseña actualizada exitosamente');
+      setShowForgotPassword(false);
+      setResetEmail('');
+      setResetCode('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setResetStep(1);
+    }
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setEmail('');
@@ -391,6 +475,19 @@ export default function SantandereanoSystem() {
       handleRegister={handleRegister}
       showPassword={showPassword}
       setShowPassword={setShowPassword}
+      showForgotPassword={showForgotPassword}
+      setShowForgotPassword={setShowForgotPassword}
+      resetEmail={resetEmail}
+      setResetEmail={setResetEmail}
+      resetCode={resetCode}
+      setResetCode={setResetCode}
+      newPassword={newPassword}
+      setNewPassword={setNewPassword}
+      confirmNewPassword={confirmNewPassword}
+      setConfirmNewPassword={setConfirmNewPassword}
+      resetStep={resetStep}
+      setResetStep={setResetStep}
+      handleForgotPassword={handleForgotPassword}
     />;
   }
 
@@ -432,7 +529,7 @@ export default function SantandereanoSystem() {
   );
 }
 
-function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword }) {
+function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword, showForgotPassword, setShowForgotPassword, resetEmail, setResetEmail, resetCode, setResetCode, newPassword, setNewPassword, confirmNewPassword, setConfirmNewPassword, resetStep, setResetStep, handleForgotPassword }) {
   if (showRegister) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
@@ -458,7 +555,7 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
                 value={registerData.email}
                 onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
                 className="bg-white/5 border-red-900/30 text-white"
-                placeholder="usuario@santandereano.com"
+                placeholder="usuario@gmail.com"
               />
             </div>
             
@@ -567,7 +664,7 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
                     className="w-full bg-white/5 border-red-900/30 pl-12 py-3 text-white placeholder-gray-500 focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
-                    placeholder="usuario@santandereano.com"
+                    placeholder="usuario@gmail.com"
                   />
                 </div>
               </div>
@@ -628,6 +725,13 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
                 </span>
               </Button>
 
+              <button
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors text-center w-full"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+
               {loginAttempts > 0 && !isBlocked && (
                 <div className="text-center">
                   <p className="text-yellow-400 text-sm">
@@ -663,6 +767,113 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center text-gray-500 text-sm">
         Panel Administrativo • Santandereano SAS © 2025
       </div>
+
+      {/* Modal Recuperar Contraseña */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md bg-white/5 backdrop-blur-xl border-red-900/20 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-white text-center">
+                {resetStep === 1 && '🔐 Recuperar Contraseña'}
+                {resetStep === 2 && '🔢 Verificar Código'}
+                {resetStep === 3 && '🔑 Nueva Contraseña'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {resetStep === 1 && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <Input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="bg-white/5 border-red-900/30 text-white"
+                      placeholder="usuario@gmail.com"
+                    />
+                  </div>
+                  <div className="text-center p-3 bg-blue-600/10 border border-blue-600/30 rounded-lg">
+                    <p className="text-blue-200 text-xs">
+                      Se generará un código de recuperación que deberá ingresar en el siguiente paso.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {resetStep === 2 && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Código de Recuperación</label>
+                    <Input
+                      type="text"
+                      value={resetCode}
+                      onChange={(e) => setResetCode(e.target.value)}
+                      className="bg-white/5 border-red-900/30 text-white text-center text-2xl tracking-widest"
+                      placeholder="000000"
+                      maxLength={6}
+                    />
+                  </div>
+                  <div className="text-center p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg">
+                    <p className="text-yellow-200 text-xs">
+                      ⏱️ El código expira en 5 minutos
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {resetStep === 3 && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Nueva Contraseña</label>
+                    <Input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="bg-white/5 border-red-900/30 text-white"
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Confirmar Contraseña</label>
+                    <Input
+                      type="password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="bg-white/5 border-red-900/30 text-white"
+                      placeholder="Repita la contraseña"
+                    />
+                  </div>
+                </>
+              )}
+              
+              <div className="flex space-x-2">
+                <Button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetStep(1);
+                    setResetEmail('');
+                    setResetCode('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                  }}
+                  variant="outline"
+                  className="flex-1 border-gray-600 text-gray-400"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleForgotPassword}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {resetStep === 1 && 'Enviar Código'}
+                  {resetStep === 2 && 'Verificar'}
+                  {resetStep === 3 && 'Cambiar Contraseña'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
