@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, ChefHat, LogOut, UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-react';
+import { User, Lock, ChefHat, LogOut, UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -202,6 +202,7 @@ export default function SantandereanoSystem() {
   const [isLoading, setIsLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   // Cargar usuario desde sessionStorage al iniciar (cada pestaña tiene su propia sesión)
   React.useEffect(() => {
@@ -576,13 +577,20 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <Input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className="w-full bg-white/5 border-red-900/30 pl-12 py-3 text-white placeholder-gray-500 focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
+                    className="w-full bg-white/5 border-red-900/30 pl-12 pr-12 py-3 text-white placeholder-gray-500 focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
                     placeholder="••••••••"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
