@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useHybridStorage } from '@/hooks/useHybridStorage';
 
 const PISOS = [
   { number: 1, mesas: 15 },
@@ -35,19 +36,18 @@ const getMeseroColorConfig = (meseroName: string) => {
 export default function CajeroMesasView() {
   const [mesas, setMesas] = useState({});
   const [pisoSeleccionado, setPisoSeleccionado] = useState(1);
+  const { getMesas } = useHybridStorage();
 
   useEffect(() => {
-    const cargarMesas = () => {
-      const mesasGuardadas = localStorage.getItem('santandereano_mesas');
-      if (mesasGuardadas) {
-        setMesas(JSON.parse(mesasGuardadas));
-      }
+    const cargarMesas = async () => {
+      const mesasData = await getMesas();
+      setMesas(mesasData);
     };
 
     cargarMesas();
     const interval = setInterval(cargarMesas, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [getMesas]);
 
   const mesasActivas = Object.entries(mesas).filter(([key, mesa]: [string, any]) => mesa.pedidos?.length > 0);
   const totalMesasActivas = mesasActivas.reduce((sum, [key, mesa]: [string, any]) => sum + (mesa.total || 0), 0);
