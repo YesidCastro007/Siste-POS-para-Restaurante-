@@ -389,6 +389,8 @@ export default function SantandereanoSystem() {
       registerData={registerData}
       setRegisterData={setRegisterData}
       handleRegister={handleRegister}
+      showPassword={showPassword}
+      setShowPassword={setShowPassword}
     />;
   }
 
@@ -430,7 +432,7 @@ export default function SantandereanoSystem() {
   );
 }
 
-function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister }) {
+function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword }) {
   if (showRegister) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
