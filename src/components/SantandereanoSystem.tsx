@@ -1329,25 +1329,7 @@ function CajeraDashboard({ user, onLogout }) {
   const [mostrarReporte, setMostrarReporte] = useState(false);
   const [reporteCierre, setReporteCierre] = useState(null);
 
-  // Cargar datos al inicializar y sincronizar cada 2 segundos
-  React.useEffect(() => {
-    cargarDatos();
-    const estadoCaja = localStorage.getItem('santandereano_caja_estado');
-    if (estadoCaja) {
-      const estado = JSON.parse(estadoCaja);
-      setCajaAbierta(estado.abierta);
-      setFechaApertura(estado.fechaApertura);
-    }
-    
-    // Sincronizar ventas cada 2 segundos
-    const interval = setInterval(() => {
-      cargarDatos();
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const cargarDatos = () => {
+  const cargarDatos = React.useCallback(() => {
     try {
       const ventasGuardadas = localStorage.getItem('santandereano_ventas');
       const saboresGuardados = localStorage.getItem('santandereano_sabores_sopas');
@@ -1364,7 +1346,6 @@ function CajeraDashboard({ user, onLogout }) {
         localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(saboresDefault));
       }
       
-      // Cargar precio de sopas desde localStorage
       const precioGuardado = localStorage.getItem('santandereano_precio_sopas');
       if (precioGuardado) {
         setPrecioSopas(parseInt(precioGuardado));
@@ -1372,7 +1353,26 @@ function CajeraDashboard({ user, onLogout }) {
     } catch (error) {
       console.error('Error cargando datos:', error);
     }
-  };
+  }, []);
+
+  React.useEffect(() => {
+    cargarDatos();
+    const estadoCaja = localStorage.getItem('santandereano_caja_estado');
+    if (estadoCaja) {
+      const estado = JSON.parse(estadoCaja);
+      setCajaAbierta(estado.abierta);
+      setFechaApertura(estado.fechaApertura);
+    }
+    
+    const handleStorageChange = () => cargarDatos();
+    window.addEventListener('storage', handleStorageChange);
+    const interval = setInterval(cargarDatos, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [cargarDatos]);
 
   const abrirCaja = () => {
     const ahora = new Date().toISOString();

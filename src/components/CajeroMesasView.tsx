@@ -45,8 +45,19 @@ export default function CajeroMesasView() {
     };
 
     cargarMesas();
-    const interval = setInterval(cargarMesas, 2000);
-    return () => clearInterval(interval);
+    
+    const handleStorageChange = () => cargarMesas();
+    const handleMesasActualizadas = (event: any) => setMesas(event.detail);
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('mesasActualizadas', handleMesasActualizadas);
+    const interval = setInterval(cargarMesas, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('mesasActualizadas', handleMesasActualizadas);
+      clearInterval(interval);
+    };
   }, [getMesas]);
 
   const mesasActivas = Object.entries(mesas).filter(([key, mesa]: [string, any]) => mesa.pedidos?.length > 0);
