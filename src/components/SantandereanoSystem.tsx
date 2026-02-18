@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import CajeroMesasView from './CajeroMesasView';
 
 // Sistema de usuarios con localStorage
 const getUsersFromStorage = () => {
@@ -1366,6 +1367,7 @@ function CajeraDashboard({ user, onLogout }) {
   const [fechaApertura, setFechaApertura] = useState(null);
   const [mostrarReporte, setMostrarReporte] = useState(false);
   const [reporteCierre, setReporteCierre] = useState(null);
+  const [vistaActual, setVistaActual] = useState('ventas'); // 'ventas' o 'mesas'
 
   const cargarDatos = React.useCallback(() => {
     try {
@@ -1660,6 +1662,39 @@ function CajeraDashboard({ user, onLogout }) {
       </div>
 
       <div className="container mx-auto px-4 py-6 space-y-6">
+        {/* Selector de Vista */}
+        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => setVistaActual('ventas')}
+                className={`h-16 flex flex-col items-center justify-center transition-all ${
+                  vistaActual === 'ventas'
+                    ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                }`}
+              >
+                <Receipt className="w-6 h-6 mb-1" />
+                <span className="text-sm font-medium">Ventas y Caja</span>
+              </Button>
+              <Button
+                onClick={() => setVistaActual('mesas')}
+                className={`h-16 flex flex-col items-center justify-center transition-all ${
+                  vistaActual === 'mesas'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                }`}
+              >
+                <UtensilsCrossed className="w-6 h-6 mb-1" />
+                <span className="text-sm font-medium">Vista de Mesas</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {vistaActual === 'mesas' ? (
+          <CajeroMesasView />
+        ) : (
         {/* Botones de Apertura/Cierre de Caja */}
         <Card className={`border-2 shadow-xl ${
           cajaAbierta 
@@ -1959,6 +1994,7 @@ function CajeraDashboard({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Modal Agregar Sabor */}
