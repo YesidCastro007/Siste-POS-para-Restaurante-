@@ -11,17 +11,17 @@ import { Separator } from '@/components/ui/separator';
 const getUsersFromStorage = () => {
   try {
     const users = localStorage.getItem('santandereano_users');
+    const defaultUsers = getDefaultUsersOnly();
+    
     if (users) {
       const parsedUsers = JSON.parse(users);
-      // Asegurar que los usuarios por defecto existan, pero sin sobrescribir los existentes
-      const defaultUsers = getDefaultUsersOnly();
-      // Primero los usuarios guardados, luego agregar los por defecto que no existan
       const mergedUsers = { ...defaultUsers, ...parsedUsers };
-      // Guardar la versión actualizada
       localStorage.setItem('santandereano_users', JSON.stringify(mergedUsers));
       return mergedUsers;
     }
-    return getDefaultUsers();
+    
+    localStorage.setItem('santandereano_users', JSON.stringify(defaultUsers));
+    return defaultUsers;
   } catch (error) {
     console.error('Error cargando usuarios:', error);
     return getDefaultUsers();
@@ -83,7 +83,7 @@ const getDefaultUsersOnly = () => {
 
 const getDefaultUsers = () => {
   const defaultUsers = getDefaultUsersOnly();
-  saveUsersToStorage(defaultUsers);
+  localStorage.setItem('santandereano_users', JSON.stringify(defaultUsers));
   return defaultUsers;
 };
 
@@ -113,12 +113,13 @@ const isValidEmail = (email) => {
 // Crear nuevo usuario (solo meseros por defecto)
 const createUser = (email, password, name) => {
   const users = getUsersFromStorage();
+  const normalizedEmail = email.toLowerCase().trim();
   
-  if (users[email]) {
+  if (users[normalizedEmail]) {
     throw new Error('El email ya está registrado');
   }
   
-  if (!isValidEmail(email)) {
+  if (!isValidEmail(normalizedEmail)) {
     throw new Error('Email inválido');
   }
   
@@ -129,18 +130,18 @@ const createUser = (email, password, name) => {
   const salt = generateSalt();
   const hashedPassword = simpleHash(password, salt);
   
-  users[email] = {
-    email,
+  users[normalizedEmail] = {
+    email: normalizedEmail,
     password: hashedPassword,
     name,
-    role: 'mesero', // Rol fijo asignado por el sistema
+    role: 'mesero',
     salt,
     active: true,
     createdAt: new Date().toISOString()
   };
   
   saveUsersToStorage(users);
-  return users[email];
+  return users[normalizedEmail];
 };
 
 // Función para verificar contraseña
@@ -314,16 +315,17 @@ export default function SantandereanoSystem() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const users = getUsersFromStorage();
-    const user = users[email.toLowerCase()];
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = users[normalizedEmail];
     
     console.log('=== INTENTO DE LOGIN ===');
-    console.log('Email ingresado:', email);
+    console.log('Email ingresado:', normalizedEmail);
     console.log('Usuario encontrado:', user ? 'Sí' : 'No');
     console.log('Usuarios disponibles:', Object.keys(users));
     
     if (user && user.active && verifyPassword(password, user.password, user.salt)) {
       console.log('✅ Login exitoso');
-      const userData = { email: email.toLowerCase(), ...user };
+      const userData = { email: normalizedEmail, ...user };
       setCurrentUser(userData);
       sessionStorage.setItem('santandereano_current_user', JSON.stringify(userData));
       
@@ -1401,11 +1403,35 @@ function CajeraDashboard({ user, onLogout }) {
     }
     
     const handleStorageChange = () => cargarDatos();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        cargarDatos();
+        const estadoCaja = localStorage.getItem('santandereano_caja_estado');
+        if (estadoCaja) {
+          const estado = JSON.parse(estadoCaja);
+          setCajaAbierta(estado.abierta);
+          setFechaApertura(estado.fechaApertura);
+        }
+      }
+    };
+    
     window.addEventListener('storage', handleStorageChange);
-    const interval = setInterval(cargarDatos, 1000);
+    window.addEventListener('focus', cargarDatos);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const interval = setInterval(() => {
+      cargarDatos();
+      const estadoCaja = localStorage.getItem('santandereano_caja_estado');
+      if (estadoCaja) {
+        const estado = JSON.parse(estadoCaja);
+        setCajaAbierta(estado.abierta);
+        setFechaApertura(estado.fechaApertura);
+      }
+    }, 500);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', cargarDatos);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
   }, [cargarDatos]);
