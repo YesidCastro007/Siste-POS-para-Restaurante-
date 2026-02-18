@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useHybridStorage } from '@/hooks/useHybridStorage';
 
 const PISOS = [
   { number: 1, mesas: 15 },
@@ -36,12 +35,17 @@ const getMeseroColorConfig = (meseroName: string) => {
 export default function CajeroMesasView() {
   const [mesas, setMesas] = useState({});
   const [pisoSeleccionado, setPisoSeleccionado] = useState(1);
-  const { getMesas } = useHybridStorage();
 
   useEffect(() => {
-    const cargarMesas = async () => {
-      const mesasData = await getMesas();
-      setMesas(mesasData);
+    const cargarMesas = () => {
+      try {
+        const mesasGuardadas = localStorage.getItem('santandereano_mesas');
+        if (mesasGuardadas) {
+          setMesas(JSON.parse(mesasGuardadas));
+        }
+      } catch (error) {
+        console.error('Error cargando mesas:', error);
+      }
     };
 
     cargarMesas();
@@ -51,14 +55,14 @@ export default function CajeroMesasView() {
     
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('mesasActualizadas', handleMesasActualizadas);
-    const interval = setInterval(cargarMesas, 2000); // Cambiado a 2 segundos para mejor rendimiento en móvil
+    const interval = setInterval(cargarMesas, 2000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('mesasActualizadas', handleMesasActualizadas);
       clearInterval(interval);
     };
-  }, [getMesas]);
+  }, []);
 
   const mesasActivas = Object.entries(mesas).filter(([key, mesa]: [string, any]) => mesa.pedidos?.length > 0);
   const totalMesasActivas = mesasActivas.reduce((sum, [key, mesa]: [string, any]) => sum + (mesa.total || 0), 0);
