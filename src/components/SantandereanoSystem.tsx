@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, ChefHat, LogOut, UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ChefHat, LogOut, UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, Eye, EyeOff, FileText, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import CajeroMesasView from './CajeroMesasView';
+import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
 
 // Sistema de usuarios con localStorage
 const getUsersFromStorage = () => {
@@ -1368,6 +1369,8 @@ function CajeraDashboard({ user, onLogout }) {
   const [mostrarReporte, setMostrarReporte] = useState(false);
   const [reporteCierre, setReporteCierre] = useState(null);
   const [vistaActual, setVistaActual] = useState('ventas'); // 'ventas' o 'mesas'
+  const [numeroWhatsApp, setNumeroWhatsApp] = useState('');
+  const [mostrarConfigWhatsApp, setMostrarConfigWhatsApp] = useState(false);
 
   const cargarDatos = React.useCallback(() => {
     try {
@@ -1466,6 +1469,18 @@ function CajeraDashboard({ user, onLogout }) {
     });
     localStorage.setItem('santandereano_historial_cierres', JSON.stringify(historialReportes));
     
+    // Generar PDF
+    const pdf = generarReportePDF(reporteCierre);
+    
+    // Si hay número de WhatsApp configurado, enviar
+    const numeroGuardado = localStorage.getItem('santandereano_whatsapp_numero');
+    if (numeroGuardado) {
+      enviarReportePorWhatsApp(pdf, numeroGuardado);
+    } else {
+      // Solo descargar el PDF
+      pdf.save(`Reporte_Cierre_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+    
     setCajaAbierta(false);
     setFechaApertura(null);
     setMostrarReporte(false);
@@ -1475,7 +1490,24 @@ function CajeraDashboard({ user, onLogout }) {
       fechaApertura: null
     }));
     
-    alert('✅ Caja cerrada exitosamente. El reporte ha sido guardado.');
+    alert('✅ Caja cerrada exitosamente. El reporte ha sido generado en PDF.');
+  };
+
+  const guardarNumeroWhatsApp = () => {
+    if (!numeroWhatsApp.trim()) {
+      alert('Por favor ingrese un número de teléfono');
+      return;
+    }
+    
+    const numeroLimpio = numeroWhatsApp.replace(/\D/g, '');
+    if (numeroLimpio.length < 10) {
+      alert('Número de teléfono inválido');
+      return;
+    }
+    
+    localStorage.setItem('santandereano_whatsapp_numero', numeroLimpio);
+    setMostrarConfigWhatsApp(false);
+    alert('✅ Número de WhatsApp guardado exitosamente');
   };
 
   const filtrarVentasDelDia = () => {
@@ -1846,6 +1878,47 @@ function CajeraDashboard({ user, onLogout }) {
           </Card>
         </div>
 
+        {/* Configuración de WhatsApp */}
+        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white flex items-center">
+                <MessageCircle className="w-5 h-5 mr-2 text-green-400" />
+                Configuración de WhatsApp
+              </CardTitle>
+              <Button
+                onClick={() => {
+                  const numeroGuardado = localStorage.getItem('santandereano_whatsapp_numero');
+                  setNumeroWhatsApp(numeroGuardado || '');
+                  setMostrarConfigWhatsApp(true);
+                }}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Configurar Número
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="p-4 bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-lg border border-green-500/30">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-white font-medium">Número configurado:</p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    {localStorage.getItem('santandereano_whatsapp_numero') 
+                      ? `+57 ${localStorage.getItem('santandereano_whatsapp_numero')}` 
+                      : 'No configurado'}
+                  </p>
+                </div>
+                <MessageCircle className="w-8 h-8 text-green-400" />
+              </div>
+              <p className="text-gray-400 text-xs mt-3">
+                💡 Al cerrar la caja, el reporte se generará en PDF y se enviará automáticamente al número configurado por WhatsApp.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Gestión de Sabores de Sopas */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardHeader>
@@ -2112,6 +2185,70 @@ function CajeraDashboard({ user, onLogout }) {
         </div>
       )}
 
+      {/* Modal Configuración WhatsApp */}
+      {mostrarConfigWhatsApp && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md bg-gradient-to-br from-slate-900/95 via-green-900/95 to-slate-900/95 backdrop-blur-xl border border-green-500/30">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white flex items-center">
+                  <MessageCircle className="w-6 h-6 mr-2 text-green-400" />
+                  Configurar WhatsApp
+                </CardTitle>
+                <Button
+                  onClick={() => setMostrarConfigWhatsApp(false)}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-green-300 mb-2">
+                  Número de Teléfono (WhatsApp)
+                </label>
+                <Input
+                  type="tel"
+                  value={numeroWhatsApp}
+                  onChange={(e) => setNumeroWhatsApp(e.target.value)}
+                  placeholder="Ej: 3001234567"
+                  className="bg-white/5 border-green-500/30 text-white"
+                />
+                <p className="text-gray-400 text-xs mt-2">
+                  💡 Ingrese el número sin espacios ni guiones. El código de país (+57) se agregará automáticamente.
+                </p>
+              </div>
+              
+              <div className="p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                <p className="text-blue-200 text-sm">
+                  ℹ️ Al cerrar la caja, el reporte se generará en PDF y se abrirá WhatsApp Web automáticamente para enviarlo al número configurado.
+                </p>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button
+                  onClick={() => setMostrarConfigWhatsApp(false)}
+                  variant="outline"
+                  className="flex-1 border-gray-600 text-gray-400"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={guardarNumeroWhatsApp}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Guardar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Modal Reporte de Cierre */}
       {mostrarReporte && reporteCierre && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -2267,7 +2404,8 @@ function CajeraDashboard({ user, onLogout }) {
                     onClick={confirmarCierreCaja}
                     className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                   >
-                    Confirmar Cierre
+                    <FileText className="w-4 h-4 mr-2" />
+                    Confirmar y Generar PDF
                   </Button>
                 </div>
               </div>
