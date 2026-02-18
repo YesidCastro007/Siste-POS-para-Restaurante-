@@ -1695,6 +1695,7 @@ function CajeraDashboard({ user, onLogout }) {
         {vistaActual === 'mesas' ? (
           <CajeroMesasView />
         ) : (
+          <>
         {/* Botones de Apertura/Cierre de Caja */}
         <Card className={`border-2 shadow-xl ${
           cajaAbierta 
@@ -1994,6 +1995,7 @@ function CajeraDashboard({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+          </>
         )}
       </div>
 
