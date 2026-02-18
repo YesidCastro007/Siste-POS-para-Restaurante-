@@ -13,9 +13,12 @@ const getUsersFromStorage = () => {
     const users = localStorage.getItem('santandereano_users');
     if (users) {
       const parsedUsers = JSON.parse(users);
-      // Asegurar que los usuarios por defecto existan
+      // Asegurar que los usuarios por defecto existan, pero sin sobrescribir los existentes
       const defaultUsers = getDefaultUsersOnly();
+      // Primero los usuarios guardados, luego agregar los por defecto que no existan
       const mergedUsers = { ...defaultUsers, ...parsedUsers };
+      // Guardar la versión actualizada
+      localStorage.setItem('santandereano_users', JSON.stringify(mergedUsers));
       return mergedUsers;
     }
     return getDefaultUsers();
@@ -36,6 +39,8 @@ const saveUsersToStorage = (users) => {
 const getDefaultUsersOnly = () => {
   const salt1 = 'admin_salt';
   const salt2 = 'cajero_salt';
+  const salt3 = 'mesero1_salt';
+  const salt4 = 'mesero2_salt';
   return {
     'admin@santandereano.com': {
       email: 'admin@santandereano.com',
@@ -52,6 +57,24 @@ const getDefaultUsersOnly = () => {
       role: 'cajera',
       name: 'Cajero Principal',
       salt: salt2,
+      active: true,
+      createdAt: new Date().toISOString()
+    },
+    'yesidcastro703@gmail.com': {
+      email: 'yesidcastro703@gmail.com',
+      password: simpleHash('1007918051', salt3),
+      role: 'mesero',
+      name: 'Yesid Castro',
+      salt: salt3,
+      active: true,
+      createdAt: new Date().toISOString()
+    },
+    'jonathancastro@santandereano.com': {
+      email: 'jonathancastro@santandereano.com',
+      password: simpleHash('jonatican', salt4),
+      role: 'mesero',
+      name: 'Jonathan Castro',
+      salt: salt4,
       active: true,
       createdAt: new Date().toISOString()
     }
@@ -291,10 +314,16 @@ export default function SantandereanoSystem() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const users = getUsersFromStorage();
-    const user = users[email];
+    const user = users[email.toLowerCase()];
+    
+    console.log('=== INTENTO DE LOGIN ===');
+    console.log('Email ingresado:', email);
+    console.log('Usuario encontrado:', user ? 'Sí' : 'No');
+    console.log('Usuarios disponibles:', Object.keys(users));
     
     if (user && user.active && verifyPassword(password, user.password, user.salt)) {
-      const userData = { email, ...user };
+      console.log('✅ Login exitoso');
+      const userData = { email: email.toLowerCase(), ...user };
       setCurrentUser(userData);
       sessionStorage.setItem('santandereano_current_user', JSON.stringify(userData));
       
@@ -302,6 +331,13 @@ export default function SantandereanoSystem() {
       localStorage.removeItem('login_attempts');
       localStorage.removeItem('block_until');
     } else {
+      console.log('❌ Login fallido');
+      if (user) {
+        console.log('Usuario existe pero contraseña incorrecta');
+      } else {
+        console.log('Usuario no existe en la base de datos');
+      }
+      
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
       localStorage.setItem('login_attempts', newAttempts.toString());
@@ -765,7 +801,7 @@ function LoginScreen({ email, setEmail, password, setPassword, role, setRole, ha
       </div>
       
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center text-gray-500 text-sm">
-        Panel Administrativo • Santandereano SAS © 2025
+        Panel Administrativo • Santandereano ID © 2025
       </div>
 
       {/* Modal Recuperar Contraseña */}
@@ -987,7 +1023,7 @@ const generateMeseroColor = (email: string) => {
   const colorKeys = Object.keys(MESERO_COLORS);
   const users = getUsersFromStorage();
   const meseros = Object.values(users).filter((u: any) => u.role === 'mesero');
-  const meseroIndex = meseros.findIndex((m: any) => m.email === email);
+  const meseroIndex = meseros.findIndex((m: any) => (m as any).email === email);
   
   if (meseroIndex !== -1) {
     return colorKeys[meseroIndex % colorKeys.length];
@@ -1004,8 +1040,8 @@ const generateMeseroColor = (email: string) => {
 const getMeseroColorConfig = (meseroName: string) => {
   const users = getUsersFromStorage();
   const mesero = Object.values(users).find((user: any) => user.name === meseroName);
-  const colorKey = mesero ? generateMeseroColor(mesero.email) : 'blue';
-  return MESERO_COLORS[colorKey] || MESERO_COLORS.blue;
+  const colorKey = mesero ? generateMeseroColor((mesero as any).email) : 'blue';
+  return MESERO_COLORS[colorKey as keyof typeof MESERO_COLORS] || MESERO_COLORS.blue;
 };
 
 function MeseroDashboard({ user, onLogout }) {
@@ -2110,13 +2146,13 @@ function CajeraDashboard({ user, onLogout }) {
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 mb-3">💳 Métodos de Pago</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {Object.entries(reporteCierre.ventasPorMetodo).map(([metodo, monto]) => (
+                    {Object.entries(reporteCierre.ventasPorMetodo).map(([metodo, monto]: [string, any]) => (
                       <div key={metodo} className="bg-gray-50 p-4 rounded-lg border">
                         <div className="text-center">
                           <p className="text-gray-600 capitalize text-sm">{metodo}</p>
-                          <p className="font-bold text-lg text-gray-900">${monto.toLocaleString()}</p>
+                          <p className="font-bold text-lg text-gray-900">${(monto as number).toLocaleString()}</p>
                           <p className="text-xs text-blue-600">
-                            {((monto / reporteCierre.totalVentas) * 100).toFixed(1)}%
+                            {(((monto as number) / reporteCierre.totalVentas) * 100).toFixed(1)}%
                           </p>
                         </div>
                       </div>

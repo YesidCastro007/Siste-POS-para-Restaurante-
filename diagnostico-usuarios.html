@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramienta de Diagnóstico - Usuarios Santandereano</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e293b 0%, #7f1d1d 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            color: #fbbf24;
+            text-align: center;
+        }
+        .section {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+        button {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        button.success {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+        }
+        button.warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+        .output {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .user-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #fbbf24;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.active {
+            background: #16a34a;
+        }
+        .status.inactive {
+            background: #dc2626;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Herramienta de Diagnóstico de Usuarios</h1>
+        <p style="text-align: center; color: #fbbf24;">Sistema de Restaurante Santandereano</p>
+
+        <!-- Sección de Diagnóstico -->
+        <div class="section">
+            <h2>📊 Diagnóstico del Sistema</h2>
+            <button onclick="diagnosticar()">Ejecutar Diagnóstico Completo</button>
+            <button class="success" onclick="listarUsuarios()">Ver Todos los Usuarios</button>
+            <div id="diagnostico-output" class="output" style="display: none;"></div>
+        </div>
+
+        <!-- Sección de Reparación -->
+        <div class="section">
+            <h2>🔨 Herramientas de Reparación</h2>
+            <button class="warning" onclick="repararUsuarios()">Reparar Base de Usuarios</button>
+            <button class="warning" onclick="restaurarDefecto()">Restaurar Usuarios por Defecto</button>
+            <button style="background: #dc2626;" onclick="limpiarTodo()">⚠️ Limpiar Todo (Reiniciar Sistema)</button>
+            <div id="reparacion-output" class="output" style="display: none;"></div>
+        </div>
+
+        <!-- Sección de Búsqueda -->
+        <div class="section">
+            <h2>🔍 Buscar Usuario Específico</h2>
+            <input type="email" id="search-email" placeholder="Ingrese el email del usuario">
+            <button onclick="buscarUsuario()">Buscar</button>
+            <div id="busqueda-output" class="output" style="display: none;"></div>
+        </div>
+
+        <!-- Sección de Creación Manual -->
+        <div class="section">
+            <h2>➕ Crear Usuario Manualmente</h2>
+            <input type="text" id="new-name" placeholder="Nombre completo">
+            <input type="email" id="new-email" placeholder="Email">
+            <input type="password" id="new-password" placeholder="Contraseña">
+            <select id="new-role" style="width: 100%; padding: 10px; margin: 10px 0; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3); background: rgba(0, 0, 0, 0.3); color: white;">
+                <option value="mesero">Mesero</option>
+                <option value="cajera">Cajera</option>
+                <option value="dueño">Dueño</option>
+            </select>
+            <button class="success" onclick="crearUsuarioManual()">Crear Usuario</button>
+            <div id="crear-output" class="output" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Función de hash simple (debe coincidir con la del sistema)
+        function simpleHash(password, salt) {
+            const combined = password + salt;
+            let hash = 0;
+            for (let i = 0; i < combined.length; i++) {
+                const char = combined.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16).padStart(8, '0').repeat(8).substring(0, 64);
+        }
+
+        function generateSalt() {
+            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+
+        function diagnosticar() {
+            const output = document.getElementById('diagnostico-output');
+            output.style.display = 'block';
+            let resultado = '=== DIAGNÓSTICO DEL SISTEMA ===\n\n';
+
+            try {
+                // Verificar localStorage
+                const usersData = localStorage.getItem('santandereano_users');
+                resultado += '✅ localStorage accesible\n';
+
+                if (!usersData) {
+                    resultado += '⚠️ No hay usuarios guardados en localStorage\n';
+                    resultado += '   Recomendación: Ejecutar "Restaurar Usuarios por Defecto"\n';
+                } else {
+                    const users = JSON.parse(usersData);
+                    const userCount = Object.keys(users).length;
+                    resultado += `✅ Usuarios encontrados: ${userCount}\n\n`;
+
+                    resultado += '--- Lista de Usuarios ---\n';
+                    Object.values(users).forEach(user => {
+                        resultado += `\n📧 Email: ${user.email}\n`;
+                        resultado += `   Nombre: ${user.name}\n`;
+                        resultado += `   Rol: ${user.role}\n`;
+                        resultado += `   Estado: ${user.active ? '✅ Activo' : '❌ Inactivo'}\n`;
+                        resultado += `   Creado: ${new Date(user.createdAt).toLocaleString()}\n`;
+                    });
+                }
+
+                // Verificar sesión actual
+                const currentSession = sessionStorage.getItem('santandereano_current_user');
+                resultado += '\n\n--- Sesión Actual ---\n';
+                if (currentSession) {
+                    const session = JSON.parse(currentSession);
+                    resultado += `✅ Sesión activa\n`;
+                    resultado += `   Usuario: ${session.name} (${session.email})\n`;
+                    resultado += `   Rol: ${session.role}\n`;
+                } else {
+                    resultado += '⚠️ No hay sesión activa\n';
+                }
+
+                resultado += '\n\n=== FIN DEL DIAGNÓSTICO ===';
+            } catch (error) {
+                resultado += `\n❌ ERROR: ${error.message}\n`;
+            }
+
+            output.textContent = resultado;
+        }
+
+        function listarUsuarios() {
+            const output = document.getElementById('diagnostico-output');
+            output.style.display = 'block';
+            
+            try {
+                const usersData = localStorage.getItem('santandereano_users');
+                if (!usersData) {
+                    output.textContent = '⚠️ No hay usuarios en el sistema';
+                    return;
+                }
+
+                const users = JSON.parse(usersData);
+                output.innerHTML = '';
+                
+                Object.values(users).forEach(user => {
+                    const card = document.createElement('div');
+                    card.className = 'user-card';
+                    card.innerHTML = `
+                        <strong>${user.name}</strong>
+                        <span class="status ${user.active ? 'active' : 'inactive'}">
+                            ${user.active ? 'ACTIVO' : 'INACTIVO'}
+                        </span>
+                        <br>
+                        📧 ${user.email}<br>
+                        👤 Rol: ${user.role}<br>
+                        📅 Creado: ${new Date(user.createdAt).toLocaleString()}
+                    `;
+                    output.appendChild(card);
+                });
+            } catch (error) {
+                output.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function repararUsuarios() {
+            const output = document.getElementById('reparacion-output');
+            output.style.display = 'block';
+            let resultado = '=== REPARANDO USUARIOS ===\n\n';
+
+            try {
+                const usersData = localStorage.getItem('santandereano_users');
+                let users = usersData ? JSON.parse(usersData) : {};
+                let reparados = 0;
+
+                // Verificar y reparar cada usuario
+                Object.keys(users).forEach(email => {
+                    const user = users[email];
+                    let necesitaReparacion = false;
+
+                    // Verificar campos obligatorios
+                    if (!user.email) {
+                        user.email = email;
+                        necesitaReparacion = true;
+                    }
+                    if (!user.active) {
+                        user.active = true;
+                        necesitaReparacion = true;
+                    }
+                    if (!user.createdAt) {
+                        user.createdAt = new Date().toISOString();
+                        necesitaReparacion = true;
+                    }
+                    if (!user.salt) {
+                        user.salt = generateSalt();
+                        necesitaReparacion = true;
+                    }
+
+                    if (necesitaReparacion) {
+                        users[email] = user;
+                        reparados++;
+                        resultado += `✅ Reparado: ${email}\n`;
+                    }
+                });
+
+                // Guardar usuarios reparados
+                localStorage.setItem('santandereano_users', JSON.stringify(users));
+                
+                resultado += `\n✅ Reparación completada\n`;
+                resultado += `   Usuarios reparados: ${reparados}\n`;
+                resultado += `   Total de usuarios: ${Object.keys(users).length}\n`;
+            } catch (error) {
+                resultado += `\n❌ ERROR: ${error.message}\n`;
+            }
+
+            output.textContent = resultado;
+        }
+
+        function restaurarDefecto() {
+            if (!confirm('¿Está seguro? Esto agregará los usuarios por defecto sin eliminar los existentes.')) {
+                return;
+            }
+
+            const output = document.getElementById('reparacion-output');
+            output.style.display = 'block';
+            let resultado = '=== RESTAURANDO USUARIOS POR DEFECTO ===\n\n';
+
+            try {
+                const usersData = localStorage.getItem('santandereano_users');
+                let users = usersData ? JSON.parse(usersData) : {};
+
+                // Usuarios por defecto
+                const defaultUsers = {
+                    'admin@santandereano.com': {
+                        email: 'admin@santandereano.com',
+                        password: simpleHash('hello', 'admin_salt'),
+                        role: 'dueño',
+                        name: 'Administrador',
+                        salt: 'admin_salt',
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    },
+                    'administrivocaja@santandereano.com': {
+                        email: 'administrivocaja@santandereano.com',
+                        password: simpleHash('1010230caja', 'cajero_salt'),
+                        role: 'cajera',
+                        name: 'Cajero Principal',
+                        salt: 'cajero_salt',
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    },
+                    'yesidcastro703@gmail.com': {
+                        email: 'yesidcastro703@gmail.com',
+                        password: simpleHash('1007918051', 'mesero1_salt'),
+                        role: 'mesero',
+                        name: 'Yesid Castro',
+                        salt: 'mesero1_salt',
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    },
+                    'jonathancastro@santandereano.com': {
+                        email: 'jonathancastro@santandereano.com',
+                        password: simpleHash('jonatican', 'mesero2_salt'),
+                        role: 'mesero',
+                        name: 'Jonathan Castro',
+                        salt: 'mesero2_salt',
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    }
+                };
+
+                // Agregar usuarios por defecto (sin sobrescribir existentes)
+                let agregados = 0;
+                Object.keys(defaultUsers).forEach(email => {
+                    if (!users[email]) {
+                        users[email] = defaultUsers[email];
+                        agregados++;
+                        resultado += `✅ Agregado: ${email}\n`;
+                    } else {
+                        resultado += `⚠️ Ya existe: ${email}\n`;
+                    }
+                });
+
+                localStorage.setItem('santandereano_users', JSON.stringify(users));
+                
+                resultado += `\n✅ Restauración completada\n`;
+                resultado += `   Usuarios agregados: ${agregados}\n`;
+                resultado += `   Total de usuarios: ${Object.keys(users).length}\n`;
+            } catch (error) {
+                resultado += `\n❌ ERROR: ${error.message}\n`;
+            }
+
+            output.textContent = resultado;
+        }
+
+        function limpiarTodo() {
+            if (!confirm('⚠️ ADVERTENCIA: Esto eliminará TODOS los datos del sistema (usuarios, mesas, ventas, etc.)\n\n¿Está COMPLETAMENTE seguro?')) {
+                return;
+            }
+
+            if (!confirm('Esta es su última oportunidad. ¿Realmente desea eliminar TODO?')) {
+                return;
+            }
+
+            const output = document.getElementById('reparacion-output');
+            output.style.display = 'block';
+
+            try {
+                // Limpiar todo el localStorage relacionado con el sistema
+                const keys = [
+                    'santandereano_users',
+                    'santandereano_mesas',
+                    'santandereano_ventas',
+                    'santandereano_sabores_sopas',
+                    'santandereano_precio_sopas',
+                    'santandereano_caja_estado',
+                    'santandereano_historial_cierres',
+                    'login_attempts',
+                    'block_until'
+                ];
+
+                keys.forEach(key => localStorage.removeItem(key));
+                sessionStorage.clear();
+
+                output.textContent = '✅ Sistema limpiado completamente\n\nRecargue la página para iniciar con datos frescos.';
+                
+                setTimeout(() => {
+                    if (confirm('¿Desea recargar la página ahora?')) {
+                        location.reload();
+                    }
+                }, 2000);
+            } catch (error) {
+                output.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function buscarUsuario() {
+            const email = document.getElementById('search-email').value.trim().toLowerCase();
+            const output = document.getElementById('busqueda-output');
+            output.style.display = 'block';
+
+            if (!email) {
+                output.textContent = '⚠️ Ingrese un email para buscar';
+                return;
+            }
+
+            try {
+                const usersData = localStorage.getItem('santandereano_users');
+                if (!usersData) {
+                    output.textContent = '⚠️ No hay usuarios en el sistema';
+                    return;
+                }
+
+                const users = JSON.parse(usersData);
+                const user = users[email];
+
+                if (!user) {
+                    output.textContent = `❌ Usuario no encontrado: ${email}\n\nUsuarios disponibles:\n${Object.keys(users).join('\n')}`;
+                    return;
+                }
+
+                let resultado = '=== USUARIO ENCONTRADO ===\n\n';
+                resultado += `📧 Email: ${user.email}\n`;
+                resultado += `👤 Nombre: ${user.name}\n`;
+                resultado += `🎭 Rol: ${user.role}\n`;
+                resultado += `✅ Estado: ${user.active ? 'Activo' : 'Inactivo'}\n`;
+                resultado += `📅 Creado: ${new Date(user.createdAt).toLocaleString()}\n`;
+                resultado += `🔐 Salt: ${user.salt}\n`;
+                resultado += `🔑 Hash: ${user.password.substring(0, 20)}...\n`;
+
+                output.textContent = resultado;
+            } catch (error) {
+                output.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function crearUsuarioManual() {
+            const name = document.getElementById('new-name').value.trim();
+            const email = document.getElementById('new-email').value.trim().toLowerCase();
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            const output = document.getElementById('crear-output');
+            output.style.display = 'block';
+
+            if (!name || !email || !password) {
+                output.textContent = '⚠️ Complete todos los campos';
+                return;
+            }
+
+            if (password.length < 6) {
+                output.textContent = '⚠️ La contraseña debe tener al menos 6 caracteres';
+                return;
+            }
+
+            try {
+                const usersData = localStorage.getItem('santandereano_users');
+                let users = usersData ? JSON.parse(usersData) : {};
+
+                if (users[email]) {
+                    output.textContent = `⚠️ Ya existe un usuario con el email: ${email}`;
+                    return;
+                }
+
+                const salt = generateSalt();
+                const hashedPassword = simpleHash(password, salt);
+
+                users[email] = {
+                    email,
+                    password: hashedPassword,
+                    name,
+                    role,
+                    salt,
+                    active: true,
+                    createdAt: new Date().toISOString()
+                };
+
+                localStorage.setItem('santandereano_users', JSON.stringify(users));
+
+                let resultado = '✅ Usuario creado exitosamente\n\n';
+                resultado += `📧 Email: ${email}\n`;
+                resultado += `👤 Nombre: ${name}\n`;
+                resultado += `🎭 Rol: ${role}\n`;
+                resultado += `🔐 Contraseña: ${password}\n`;
+                resultado += `\nYa puede iniciar sesión con estas credenciales.`;
+
+                output.textContent = resultado;
+
+                // Limpiar formulario
+                document.getElementById('new-name').value = '';
+                document.getElementById('new-email').value = '';
+                document.getElementById('new-password').value = '';
+            } catch (error) {
+                output.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        // Ejecutar diagnóstico automático al cargar
+        window.onload = () => {
+            diagnosticar();
+        };
+    </script>
+</body>
+</html>
