@@ -46,21 +46,6 @@ Un sistema completo de gestión para restaurantes desarrollado con React, TypeSc
 - Node.js 18+ 
 - npm o yarn
 
-### Instalación
-```bash
-# Clonar el repositorio
-git clone https://github.com/tu-usuario/sistema-restaurante-santandereano.git
-
-# Navegar al directorio
-cd sistema-restaurante-santandereano
-
-# Instalar dependencias
-npm install
-
-# Iniciar servidor de desarrollo
-npm run dev
-```
-
 ### Scripts Disponibles
 ```bash
 npm run dev      # Servidor de desarrollo
@@ -190,9 +175,4 @@ To optimize the restaurant sales process through a web-based POS system, enablin
 -Node.js v18 o superior 
 npm or pnpm 
 
-## Instalación ⚙️
-git clone https://github.com/yesid-castro/sistema-pos-restaurante.git 
-cd sistema-pos-restaurante 
-npm install
-npm run dev 
 >>>>>>> 72f3743a8611fc286daec6302c0850e3248de709
