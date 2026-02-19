@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # 🍽️ Sistema de Restaurante Santandereano
 Un sistema completo de gestión para restaurantes desarrollado con React, TypeScript y Vite. Diseñado específicamente para optimizar la operación del Restaurante Santandereano SAS.
 
@@ -174,5 +174,3 @@ To optimize the restaurant sales process through a web-based POS system, enablin
 ## Requirements 📦
 -Node.js v18 o superior 
 npm or pnpm 
-
->>>>>>> 72f3743a8611fc286daec6302c0850e3248de709
