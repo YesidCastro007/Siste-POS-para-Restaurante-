@@ -9,7 +9,7 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 1. Entra a [supabase.com](https://supabase.com) y crea un proyecto (el plan gratuito sirve).
 2. Ve a **Project Settings → API** y copia:
    - **Project URL**
-   - **anon public key**
+   - **publishable key** (empieza con `sb_publishable_`; en cuentas antiguas aparece como **anon public**). Nunca uses la **secret** ni la **service_role**.
 
 ## 2. Crear las tablas
 
@@ -17,20 +17,20 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 2. Si nunca ejecutaste `supabase/migrations/001_initial_schema.sql`, pega su contenido y pulsa **Run**.
 3. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**.
 
-## 3. Configurar el correo de recuperación
+## 3. Configurar las direcciones de la app
 
-La app pide un código de 6 dígitos para recuperar la contraseña, así que el correo debe incluir ese código:
+Cuando alguien olvida su contraseña, Supabase le envía un correo con un enlace **Reset password**. Ese enlace debe volver a tu app:
 
-1. Ve a **Authentication → Emails → Templates → Reset Password** (en algunas versiones del panel: **Authentication → Email Templates**).
-2. Reemplaza el contenido por algo como:
+1. Ve a **Authentication → URL Configuration**.
+2. En **Site URL** pon la dirección de producción de tu app en Vercel (por ejemplo `https://sistema-restaurante-santandereano.vercel.app`).
+3. En **Redirect URLs** pulsa **Add URL** y agrega:
+   - `https://*-yesid-castros-projects-96036457.vercel.app/**` (las vistas previas de Vercel)
+   - `http://localhost:8080/**` (cuando pruebas en tu computador)
+4. Guarda.
 
-   ```html
-   <h2>Recuperar contraseña</h2>
-   <p>Su código de recuperación es: <strong>{{ .Token }}</strong></p>
-   ```
-3. Guarda.
+**Importante sobre los correos:** sin un servidor de correo propio (SMTP), Supabase solo envía correos a los miembros de tu organización en Supabase (por ejemplo, tu propio correo) y muy pocos por hora. Sirve para probar. Para que los meseros reciban sus correos de recuperación y confirmación, configura un SMTP en **Authentication → Emails → SMTP Settings** (por ejemplo con [Resend](https://resend.com), que tiene plan gratuito).
 
-Opcional: en **Authentication → Sign In / Providers → Email** puedes desactivar **Confirm email** si no quieres que los meseros nuevos confirmen su correo antes de entrar.
+Opcional: en **Authentication → Sign In / Providers → Email** puedes desactivar **Confirm email** para que los meseros nuevos entren sin confirmar su correo.
 
 ## 4. Poner las claves en la app
 

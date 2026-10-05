@@ -6,7 +6,7 @@ import LoginScreen from './login/LoginScreen';
 import MeseroDashboard from './mesero/MeseroDashboard';
 import CajeraDashboard from './cajera/CajeraDashboard';
 import DueñoDashboard from './dueno/DuenoDashboard';
-import { isValidEmail, iniciarSesion, sesionActual, cerrarSesion, registrarMesero, enviarCodigoRecuperacion, verificarCodigoRecuperacion, cambiarContrasena } from '@/lib/auth';
+import { isValidEmail, iniciarSesion, sesionActual, cerrarSesion, registrarMesero, enviarEnlaceRecuperacion, sesionRecuperacionLista, cambiarContrasena, abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido } from '@/lib/auth';
 
 export default function SantandereanoSystem() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -23,16 +23,30 @@ export default function SantandereanoSystem() {
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
-  const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [resetStep, setResetStep] = useState(1);
 
   // Recuperar la sesión de Supabase guardada en esta pestaña
   React.useEffect(() => {
-    sesionActual().then((usuario) => {
-      if (usuario) setCurrentUser(usuario);
-    });
+    if (abiertoDesdeEnlaceRecuperacion) {
+      // Llegó desde el enlace del correo: pedir la nueva contraseña en vez de entrar
+      sesionRecuperacionLista().then((lista) => {
+        if (lista) {
+          setShowForgotPassword(true);
+          setResetStep(3);
+        } else {
+          alert('El enlace de recuperación expiró o ya se usó. Solicite uno nuevo.');
+        }
+      });
+    } else if (enlaceRecuperacionInvalido) {
+      alert('El enlace de recuperación expiró o ya se usó. Solicite uno nuevo.');
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      sesionActual().then((usuario) => {
+        if (usuario) setCurrentUser(usuario);
+      });
+    }
 
     // Verificar bloqueo existente
     const blockUntil = localStorage.getItem('block_until');
@@ -170,17 +184,10 @@ export default function SantandereanoSystem() {
           return;
         }
         
-        await enviarCodigoRecuperacion(resetEmail);
-        alert('Si existe una cuenta con este email, le enviamos un código de recuperación. Revise su correo (también la carpeta de spam).');
-        setResetStep(2);
-      } else if (resetStep === 2) {
-        if (!resetCode.trim()) {
-          alert('Ingrese el código de recuperación');
-          return;
-        }
-        
-        await verificarCodigoRecuperacion(resetEmail, resetCode);
-        setResetStep(3);
+        await enviarEnlaceRecuperacion(resetEmail);
+        alert('Si existe una cuenta con este email, le enviamos un enlace para cambiar la contraseña. Ábralo desde este dispositivo (revise también la carpeta de spam).');
+        setShowForgotPassword(false);
+        setResetEmail('');
       } else if (resetStep === 3) {
         if (!newPassword.trim() || !confirmNewPassword.trim()) {
           alert('Complete todos los campos');
@@ -202,7 +209,6 @@ export default function SantandereanoSystem() {
         alert('✅ Contraseña actualizada exitosamente');
         setShowForgotPassword(false);
         setResetEmail('');
-        setResetCode('');
         setNewPassword('');
         setConfirmNewPassword('');
         setResetStep(1);
@@ -248,8 +254,6 @@ export default function SantandereanoSystem() {
       setShowForgotPassword={setShowForgotPassword}
       resetEmail={resetEmail}
       setResetEmail={setResetEmail}
-      resetCode={resetCode}
-      setResetCode={setResetCode}
       newPassword={newPassword}
       setNewPassword={setNewPassword}
       confirmNewPassword={confirmNewPassword}

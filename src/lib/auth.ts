@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+export { abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido } from '@/lib/supabase';
 
 // Autenticación con Supabase Auth. Las contraseñas las guarda y verifica Supabase;
 // el rol de cada usuario vive en la tabla `profiles` (ver supabase/migrations/002_auth_profiles.sql).
@@ -134,25 +135,26 @@ export const registrarMesero = async (email: string, password: string, name: str
   return { requiereConfirmacion };
 };
 
-// Recuperación de contraseña en 3 pasos: código por correo, verificar código, nueva contraseña
-export const enviarCodigoRecuperacion = async (email: string) => {
-  const { error } = await getClient().auth.resetPasswordForEmail(normalizarEmail(email));
+// Recuperación de contraseña: Supabase envía un enlace al correo. Al abrirlo, la app
+// recibe una sesión temporal y muestra el formulario de nueva contraseña.
+export const enviarEnlaceRecuperacion = async (email: string) => {
+  const { error } = await getClient().auth.resetPasswordForEmail(normalizarEmail(email), {
+    redirectTo: window.location.origin
+  });
   if (error) throw new Error(error.message);
 };
 
-export const verificarCodigoRecuperacion = async (email: string, codigo: string) => {
-  const { error } = await getClient().auth.verifyOtp({
-    email: normalizarEmail(email),
-    token: codigo.trim(),
-    type: 'recovery'
-  });
-  if (error) throw new Error('Código incorrecto o expirado');
+// Espera a que Supabase procese el enlace y dice si quedó una sesión de recuperación válida
+export const sesionRecuperacionLista = async () => {
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
 };
 
 export const cambiarContrasena = async (nuevaContrasena: string) => {
   const client = getClient();
   const { error } = await client.auth.updateUser({ password: nuevaContrasena });
   if (error) throw new Error(error.message);
-  // Verificar el código abre una sesión; se cierra para que el usuario entre con la nueva contraseña
+  // El enlace abre una sesión temporal; se cierra para que el usuario entre con la nueva contraseña
   await client.auth.signOut();
 };
