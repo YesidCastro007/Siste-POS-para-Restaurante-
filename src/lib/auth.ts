@@ -1,99 +1,29 @@
-// Sistema de usuarios con localStorage
-export const getUsersFromStorage = () => {
-  try {
-    const users = localStorage.getItem('santandereano_users');
-    const defaultUsers = getDefaultUsersOnly();
-    
-    if (users) {
-      const parsedUsers = JSON.parse(users);
-      const mergedUsers = { ...defaultUsers, ...parsedUsers };
-      localStorage.setItem('santandereano_users', JSON.stringify(mergedUsers));
-      return mergedUsers;
-    }
-    
-    localStorage.setItem('santandereano_users', JSON.stringify(defaultUsers));
-    return defaultUsers;
-  } catch (error) {
-    console.error('Error cargando usuarios:', error);
-    return getDefaultUsers();
+import { supabase } from '@/lib/supabase';
+export { abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido } from '@/lib/supabase';
+
+// Autenticación con Supabase Auth. Las contraseñas las guarda y verifica Supabase;
+// el rol de cada usuario vive en la tabla `profiles` (ver supabase/migrations/002_auth_profiles.sql).
+
+export type Rol = 'mesero' | 'cajera' | 'dueño';
+
+export interface Usuario {
+  id: string;
+  email: string;
+  name: string;
+  role: Rol;
+  active: boolean;
+}
+
+const PERFIL_COLUMNAS = 'id, email, name, role, active';
+
+const getClient = () => {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
   }
+  return supabase;
 };
 
-export const saveUsersToStorage = (users) => {
-  try {
-    localStorage.setItem('santandereano_users', JSON.stringify(users));
-  } catch (error) {
-    console.error('Error guardando usuarios:', error);
-  }
-};
-
-export const getDefaultUsersOnly = () => {
-  const salt1 = 'admin_salt';
-  const salt2 = 'cajero_salt';
-  const salt3 = 'mesero1_salt';
-  const salt4 = 'mesero2_salt';
-  return {
-    'admin@santandereano.com': {
-      email: 'admin@santandereano.com',
-      password: simpleHash('hello', salt1),
-      role: 'dueño',
-      name: 'Administrador',
-      salt: salt1,
-      active: true,
-      createdAt: new Date().toISOString()
-    },
-    'administrivocaja@santandereano.com': {
-      email: 'administrivocaja@santandereano.com',
-      password: simpleHash('1010230caja', salt2),
-      role: 'cajera',
-      name: 'Cajero Principal',
-      salt: salt2,
-      active: true,
-      createdAt: new Date().toISOString()
-    },
-    'yesidcastro703@gmail.com': {
-      email: 'yesidcastro703@gmail.com',
-      password: simpleHash('1007918051', salt3),
-      role: 'mesero',
-      name: 'Yesid Castro',
-      salt: salt3,
-      active: true,
-      createdAt: new Date().toISOString()
-    },
-    'jonathancastro@santandereano.com': {
-      email: 'jonathancastro@santandereano.com',
-      password: simpleHash('jonatican', salt4),
-      role: 'mesero',
-      name: 'Jonathan Castro',
-      salt: salt4,
-      active: true,
-      createdAt: new Date().toISOString()
-    }
-  };
-};
-
-export const getDefaultUsers = () => {
-  const defaultUsers = getDefaultUsersOnly();
-  localStorage.setItem('santandereano_users', JSON.stringify(defaultUsers));
-  return defaultUsers;
-};
-
-// Función simple de hash (SHA-256 simulado)
-export const simpleHash = (password, salt) => {
-  const combined = password + salt;
-  let hash = 0;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0').repeat(8).substring(0, 64);
-};
-
-// Generar salt aleatorio
-export const generateSalt = () => {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-};
+const normalizarEmail = (email: string) => email.toLowerCase().trim();
 
 // Validar email
 export const isValidEmail = (email) => {
@@ -101,42 +31,130 @@ export const isValidEmail = (email) => {
   return emailRegex.test(email);
 };
 
-// Crear nuevo usuario (solo meseros por defecto)
-export const createUser = (email, password, name) => {
-  const users = getUsersFromStorage();
-  const normalizedEmail = email.toLowerCase().trim();
-  
-  if (users[normalizedEmail]) {
-    throw new Error('El email ya está registrado');
+// Lista de usuarios (para los colores de meseros). Se carga después de iniciar sesión.
+let usuariosCache: Usuario[] = [];
+
+export const getUsuariosCache = () => usuariosCache;
+
+export const cargarUsuarios = async () => {
+  const { data, error } = await getClient()
+    .from('profiles')
+    .select(PERFIL_COLUMNAS)
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('Error cargando usuarios:', error.message);
+    return usuariosCache;
   }
-  
+  usuariosCache = (data ?? []) as Usuario[];
+  return usuariosCache;
+};
+
+const obtenerPerfil = async (userId: string): Promise<Usuario> => {
+  const { data, error } = await getClient()
+    .from('profiles')
+    .select(PERFIL_COLUMNAS)
+    .eq('id', userId)
+    .single();
+  if (error || !data) {
+    throw new Error('No se encontró el perfil del usuario. Contacte al administrador.');
+  }
+  return data as Usuario;
+};
+
+// Devuelve el perfil si el usuario está activo; si no, cierra la sesión
+const perfilActivo = async (userId: string): Promise<Usuario> => {
+  const perfil = await obtenerPerfil(userId);
+  if (!perfil.active) {
+    await getClient().auth.signOut();
+    throw new Error('Este usuario está inactivo. Contacte al administrador.');
+  }
+  await cargarUsuarios();
+  return perfil;
+};
+
+export const iniciarSesion = async (email: string, password: string): Promise<Usuario> => {
+  const { data, error } = await getClient().auth.signInWithPassword({
+    email: normalizarEmail(email),
+    password
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes('email not confirmed')) {
+      throw new Error('Debe confirmar su correo antes de iniciar sesión. Revise su bandeja de entrada.');
+    }
+    throw new Error('Credenciales incorrectas');
+  }
+  return perfilActivo(data.user.id);
+};
+
+// Recupera la sesión guardada en esta pestaña, si existe
+export const sesionActual = async (): Promise<Usuario | null> => {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return null;
+  try {
+    return await perfilActivo(data.session.user.id);
+  } catch (error) {
+    console.error('Sesión inválida:', error.message);
+    await supabase.auth.signOut();
+    return null;
+  }
+};
+
+export const cerrarSesion = async () => {
+  usuariosCache = [];
+  if (supabase) await supabase.auth.signOut();
+};
+
+// Registro público: siempre crea meseros (el rol lo asigna la base de datos)
+export const registrarMesero = async (email: string, password: string, name: string) => {
+  const normalizedEmail = normalizarEmail(email);
+
   if (!isValidEmail(normalizedEmail)) {
     throw new Error('Email inválido');
   }
-  
+
   if (password.length < 6) {
     throw new Error('La contraseña debe tener al menos 6 caracteres');
   }
-  
-  const salt = generateSalt();
-  const hashedPassword = simpleHash(password, salt);
-  
-  users[normalizedEmail] = {
+
+  const { data, error } = await getClient().auth.signUp({
     email: normalizedEmail,
-    password: hashedPassword,
-    name,
-    role: 'mesero',
-    salt,
-    active: true,
-    createdAt: new Date().toISOString()
-  };
-  
-  saveUsersToStorage(users);
-  return users[normalizedEmail];
+    password,
+    options: { data: { name: name.trim() } }
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes('already registered')) {
+      throw new Error('El email ya está registrado');
+    }
+    throw new Error(error.message);
+  }
+
+  // El registro no deja la sesión abierta: el usuario entra desde el login
+  const requiereConfirmacion = !data.session;
+  if (data.session) await getClient().auth.signOut();
+  return { requiereConfirmacion };
 };
 
-// Función para verificar contraseña
-export const verifyPassword = (inputPassword, storedHash, salt) => {
-  const inputHash = simpleHash(inputPassword, salt);
-  return inputHash === storedHash;
+// Recuperación de contraseña: Supabase envía un enlace al correo. Al abrirlo, la app
+// recibe una sesión temporal y muestra el formulario de nueva contraseña.
+export const enviarEnlaceRecuperacion = async (email: string) => {
+  const { error } = await getClient().auth.resetPasswordForEmail(normalizarEmail(email), {
+    redirectTo: window.location.origin
+  });
+  if (error) throw new Error(error.message);
+};
+
+// Espera a que Supabase procese el enlace y dice si quedó una sesión de recuperación válida
+export const sesionRecuperacionLista = async () => {
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
+};
+
+export const cambiarContrasena = async (nuevaContrasena: string) => {
+  const client = getClient();
+  const { error } = await client.auth.updateUser({ password: nuevaContrasena });
+  if (error) throw new Error(error.message);
+  // El enlace abre una sesión temporal; se cierra para que el usuario entre con la nueva contraseña
+  await client.auth.signOut();
 };

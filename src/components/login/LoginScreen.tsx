@@ -2,8 +2,9 @@ import { User, Lock, ChefHat, UtensilsCrossed, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cerrarSesion } from '@/lib/auth';
 
-export default function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword, showForgotPassword, setShowForgotPassword, resetEmail, setResetEmail, resetCode, setResetCode, newPassword, setNewPassword, confirmNewPassword, setConfirmNewPassword, resetStep, setResetStep, handleForgotPassword }) {
+export default function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword, showForgotPassword, setShowForgotPassword, resetEmail, setResetEmail, newPassword, setNewPassword, confirmNewPassword, setConfirmNewPassword, resetStep, setResetStep, handleForgotPassword }) {
   if (showRegister) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
@@ -249,7 +250,6 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
             <CardHeader>
               <CardTitle className="text-white text-center">
                 {resetStep === 1 && '🔐 Recuperar Contraseña'}
-                {resetStep === 2 && '🔢 Verificar Código'}
                 {resetStep === 3 && '🔑 Nueva Contraseña'}
               </CardTitle>
             </CardHeader>
@@ -268,28 +268,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                   </div>
                   <div className="text-center p-3 bg-blue-600/10 border border-blue-600/30 rounded-lg">
                     <p className="text-blue-200 text-xs">
-                      Se generará un código de recuperación que deberá ingresar en el siguiente paso.
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {resetStep === 2 && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Código de Recuperación</label>
-                    <Input
-                      type="text"
-                      value={resetCode}
-                      onChange={(e) => setResetCode(e.target.value)}
-                      className="bg-white/5 border-red-900/30 text-white text-center text-2xl tracking-widest"
-                      placeholder="000000"
-                      maxLength={6}
-                    />
-                  </div>
-                  <div className="text-center p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg">
-                    <p className="text-yellow-200 text-xs">
-                      ⏱️ El código expira en 5 minutos
+                      Le enviaremos un enlace a su correo para crear una nueva contraseña.
                     </p>
                   </div>
                 </>
@@ -323,10 +302,11 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
               <div className="flex space-x-2">
                 <Button
                   onClick={() => {
+                    // Si venía del enlace del correo, cerrar la sesión temporal de recuperación
+                    if (resetStep === 3) cerrarSesion();
                     setShowForgotPassword(false);
                     setResetStep(1);
                     setResetEmail('');
-                    setResetCode('');
                     setNewPassword('');
                     setConfirmNewPassword('');
                   }}
@@ -339,8 +319,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                   onClick={handleForgotPassword}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
-                  {resetStep === 1 && 'Enviar Código'}
-                  {resetStep === 2 && 'Verificar'}
+                  {resetStep === 1 && 'Enviar Enlace'}
                   {resetStep === 3 && 'Cambiar Contraseña'}
                 </Button>
               </div>
