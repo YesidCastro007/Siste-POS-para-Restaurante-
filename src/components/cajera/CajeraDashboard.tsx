@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MENU_DATA, SABORES_POR_DEFECTO } from '@/data/menu';
-import { cargarVentas, leerConfig, guardarConfig, escucharCambios } from '@/lib/datos';
+import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
 import CajeroMesasView from '@/components/CajeroMesasView';
 import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
 
@@ -30,7 +30,9 @@ export default function CajeraDashboard({ user, onLogout }) {
   const [numeroConfigurado, setNumeroConfigurado] = useState('');
 
   // Ventas, sabores, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
+  const numeroCarga = React.useRef(0);
   const cargarDatos = React.useCallback(async () => {
+    const carga = ++numeroCarga.current;
     try {
       const [ventas, sabores, precio, estadoCaja, numero] = await Promise.all([
         cargarVentas(),
@@ -39,6 +41,7 @@ export default function CajeraDashboard({ user, onLogout }) {
         leerConfig('caja_estado', { abierta: false, fechaApertura: null }),
         leerConfig('whatsapp_numero', '')
       ]);
+      if (carga !== numeroCarga.current) return;
       setVentasHoy(ventas);
       setSaboresSopas(sabores);
       setPrecioSopas(Number(precio));
@@ -50,16 +53,7 @@ export default function CajeraDashboard({ user, onLogout }) {
     }
   }, []);
 
-  React.useEffect(() => {
-    cargarDatos();
-    const dejarDeEscuchar = escucharCambios(['ventas', 'config'], cargarDatos);
-    // Respaldo por si se pierde la conexión en vivo
-    const interval = setInterval(cargarDatos, 15000);
-    return () => {
-      dejarDeEscuchar();
-      clearInterval(interval);
-    };
-  }, [cargarDatos]);
+  React.useEffect(() => mantenerActualizado(['ventas', 'config'], cargarDatos), [cargarDatos]);
 
   // Guarda un ajuste compartido; si falla, avisa y vuelve a cargar lo que hay en Supabase
   const guardarAjuste = async (key, value) => {

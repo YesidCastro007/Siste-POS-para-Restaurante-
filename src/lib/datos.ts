@@ -30,22 +30,20 @@ export const cargarMesas = async (): Promise<Mesas> => {
   return Object.fromEntries((data ?? []).map(fila => [fila.mesa_key, fila.data]));
 };
 
-// Guarda solo las mesas que cambiaron, para no pisar lo que otro mesero hizo en otra mesa
+// Guarda solo las mesas que cambiaron, para no pisar lo que otro mesero hizo en otra mesa.
+// Nunca borra mesas: liberar una mesa se hace explícitamente con liberarMesa.
 export const guardarCambiosMesas = async (anteriores: Mesas, nuevas: Mesas) => {
-  const client = getClient();
   const cambiadas = Object.entries(nuevas)
     .filter(([key, mesa]) => JSON.stringify(anteriores[key]) !== JSON.stringify(mesa))
     .map(([key, mesa]) => ({ mesa_key: key, data: mesa, updated_at: new Date().toISOString() }));
-  const borradas = Object.keys(anteriores).filter(key => !(key in nuevas));
+  if (cambiadas.length === 0) return;
+  const { error } = await getClient().from('mesas').upsert(cambiadas);
+  if (error) throw new Error(error.message);
+};
 
-  if (cambiadas.length > 0) {
-    const { error } = await client.from('mesas').upsert(cambiadas);
-    if (error) throw new Error(error.message);
-  }
-  if (borradas.length > 0) {
-    const { error } = await client.from('mesas').delete().in('mesa_key', borradas);
-    if (error) throw new Error(error.message);
-  }
+export const liberarMesa = async (mesaKey: string) => {
+  const { error } = await getClient().from('mesas').delete().eq('mesa_key', mesaKey);
+  if (error) throw new Error(error.message);
 };
 
 // ---------- Ventas ----------
@@ -107,4 +105,23 @@ export const escucharCambios = (tablas: string[], alCambiar: () => void) => {
   });
   canal.subscribe();
   return () => { client.removeChannel(canal); };
+};
+
+// Mantiene los datos al día: carga al entrar, con cada cambio en vivo, cada pocos segundos
+// como respaldo, y al volver a la pestaña (los celulares pausan las pestañas en segundo plano).
+export const mantenerActualizado = (tablas: string[], cargar: () => void, cadaMs = 5000) => {
+  cargar();
+  const dejarDeEscuchar = escucharCambios(tablas, cargar);
+  const intervalo = setInterval(cargar, cadaMs);
+  const alVolver = () => { if (!document.hidden) cargar(); };
+  document.addEventListener('visibilitychange', alVolver);
+  window.addEventListener('focus', cargar);
+  window.addEventListener('online', cargar);
+  return () => {
+    dejarDeEscuchar();
+    clearInterval(intervalo);
+    document.removeEventListener('visibilitychange', alVolver);
+    window.removeEventListener('focus', cargar);
+    window.removeEventListener('online', cargar);
+  };
 };

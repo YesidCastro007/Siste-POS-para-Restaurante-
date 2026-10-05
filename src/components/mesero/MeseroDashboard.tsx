@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MENU_DATA, PISOS, SABORES_POR_DEFECTO } from '@/data/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
-import { cargarMesas, guardarCambiosMesas, registrarVenta, leerConfig, escucharCambios } from '@/lib/datos';
+import { cargarMesas, guardarCambiosMesas, liberarMesa, registrarVenta, leerConfig, mantenerActualizado } from '@/lib/datos';
 import ModalPedido from './ModalPedido';
 import ModalCobro from './ModalCobro';
 
@@ -18,15 +18,21 @@ export default function MeseroDashboard({ user, onLogout }) {
   const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
 
   const mesasRef = React.useRef({});
+  const escriturasPendientes = React.useRef(0);
+  const colaEscrituras = React.useRef(Promise.resolve());
+  const numeroCarga = React.useRef(0);
 
-  // Mesas, ventas y sabores se guardan en Supabase y se comparten entre dispositivos
+  // Mesas y sabores se guardan en Supabase y se comparten entre dispositivos
   const cargarDatos = React.useCallback(async () => {
+    const carga = ++numeroCarga.current;
     try {
       const [mesasGuardadas, sabores, precio] = await Promise.all([
         cargarMesas(),
         leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
         leerConfig('precio_sopas', MENU_DATA.sopas.price)
       ]);
+      // Se descarta si llegó una carga más nueva o si hay un guardado en curso
+      if (carga !== numeroCarga.current || escriturasPendientes.current > 0) return;
       mesasRef.current = mesasGuardadas;
       setMesas(mesasGuardadas);
       setSaboresSopas(sabores);
@@ -36,30 +42,33 @@ export default function MeseroDashboard({ user, onLogout }) {
     }
   }, []);
 
-  const guardarMesas = async (nuevasMesas) => {
-    const anteriores = mesasRef.current;
+  // Cambia las mesas en pantalla de inmediato y luego guarda en Supabase.
+  // Los guardados van en fila, para que por ejemplo "liberar mesa" no llegue antes que el último pedido.
+  const guardarEnSupabase = (nuevasMesas, guardar) => {
+    escriturasPendientes.current++;
+    numeroCarga.current++;
     mesasRef.current = nuevasMesas;
     setMesas(nuevasMesas);
-    try {
-      await guardarCambiosMesas(anteriores, nuevasMesas);
-    } catch (error) {
-      console.error('Error guardando mesas:', error.message);
-      alert('⚠️ No se pudo guardar la mesa. Revise la conexión a internet.');
-      cargarDatos();
-    }
+    colaEscrituras.current = colaEscrituras.current.then(async () => {
+      try {
+        await guardar();
+      } catch (error) {
+        console.error('Error guardando mesas:', error.message);
+        alert('⚠️ No se pudo guardar la mesa. Revise la conexión a internet.');
+      } finally {
+        escriturasPendientes.current--;
+        if (escriturasPendientes.current === 0) cargarDatos();
+      }
+    });
+    return colaEscrituras.current;
   };
 
-  // Cargar datos al entrar y cada vez que otro dispositivo cambie algo
-  React.useEffect(() => {
-    cargarDatos();
-    const dejarDeEscuchar = escucharCambios(['mesas', 'config'], cargarDatos);
-    // Respaldo por si se pierde la conexión en vivo
-    const interval = setInterval(cargarDatos, 15000);
-    return () => {
-      dejarDeEscuchar();
-      clearInterval(interval);
-    };
-  }, [cargarDatos]);
+  const guardarMesas = (nuevasMesas) => {
+    const anteriores = mesasRef.current;
+    return guardarEnSupabase(nuevasMesas, () => guardarCambiosMesas(anteriores, nuevasMesas));
+  };
+
+  React.useEffect(() => mantenerActualizado(['mesas', 'config'], cargarDatos), [cargarDatos]);
 
   const mesasDelPiso = PISOS.find(p => p.number === pisoActual)?.mesas || 0;
 
@@ -94,10 +103,10 @@ export default function MeseroDashboard({ user, onLogout }) {
       return;
     }
 
-    // Limpiar la mesa y guardar
-    const nuevasMesas = { ...mesas };
+    // Liberar la mesa
+    const nuevasMesas = { ...mesasRef.current };
     delete nuevasMesas[mesaKey];
-    guardarMesas(nuevasMesas);
+    guardarEnSupabase(nuevasMesas, () => liberarMesa(mesaKey));
 
     // Cerrar modales
     setMostrarCobro(false);

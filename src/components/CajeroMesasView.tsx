@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cargarMesas, escucharCambios } from '@/lib/datos';
+import { cargarMesas, mantenerActualizado } from '@/lib/datos';
 
 const PISOS = [
   { number: 1, mesas: 15 },
@@ -38,22 +38,17 @@ export default function CajeroMesasView() {
   const [pisoSeleccionado, setPisoSeleccionado] = useState(1);
 
   useEffect(() => {
+    let numeroCarga = 0;
     const actualizarMesas = async () => {
+      const carga = ++numeroCarga;
       try {
-        setMesas(await cargarMesas());
+        const mesasGuardadas = await cargarMesas();
+        if (carga === numeroCarga) setMesas(mesasGuardadas);
       } catch (error) {
         console.error('Error cargando mesas:', error.message);
       }
     };
-
-    actualizarMesas();
-    const dejarDeEscuchar = escucharCambios(['mesas'], actualizarMesas);
-    const interval = setInterval(actualizarMesas, 15000);
-
-    return () => {
-      dejarDeEscuchar();
-      clearInterval(interval);
-    };
+    return mantenerActualizado(['mesas'], actualizarMesas);
   }, []);
 
   const mesasActivas = Object.entries(mesas).filter(([key, mesa]: [string, any]) => mesa.pedidos?.length > 0);
