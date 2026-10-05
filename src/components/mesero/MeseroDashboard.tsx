@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { LogOut, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MENU_DATA, PISOS } from '@/data/menu';
+import { MENU_DATA, PISOS, SABORES_POR_DEFECTO } from '@/data/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
+import { cargarMesas, guardarCambiosMesas, registrarVenta, leerConfig, escucharCambios } from '@/lib/datos';
 import ModalPedido from './ModalPedido';
 import ModalCobro from './ModalCobro';
 
@@ -12,84 +13,53 @@ export default function MeseroDashboard({ user, onLogout }) {
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
   const [mesas, setMesas] = useState({});
   const [mostrarPedido, setMostrarPedido] = useState(false);
-  const [historialVentas, setHistorialVentas] = useState([]);
   const [mostrarCobro, setMostrarCobro] = useState(false);
   const [saboresSopas, setSaboresSopas] = useState([]);
   const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
 
-  // Funciones de persistencia
-  const cargarDatos = () => {
+  const mesasRef = React.useRef({});
+
+  // Mesas, ventas y sabores se guardan en Supabase y se comparten entre dispositivos
+  const cargarDatos = React.useCallback(async () => {
     try {
-      const mesasGuardadas = localStorage.getItem('santandereano_mesas');
-      const ventasGuardadas = localStorage.getItem('santandereano_ventas');
-      const saboresGuardados = localStorage.getItem('santandereano_sabores_sopas');
-      
-      if (mesasGuardadas) {
-        setMesas(JSON.parse(mesasGuardadas));
-      }
-      if (ventasGuardadas) {
-        setHistorialVentas(JSON.parse(ventasGuardadas));
-      }
-      if (saboresGuardados) {
-        setSaboresSopas(JSON.parse(saboresGuardados));
-      } else {
-        // Sabores por defecto si no hay guardados
-        const saboresDefault = ['Sopa de costilla', 'Sancocho'];
-        setSaboresSopas(saboresDefault);
-        localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(saboresDefault));
-      }
-      
-      // Cargar precio de sopas desde localStorage
-      const precioGuardado = localStorage.getItem('santandereano_precio_sopas');
-      if (precioGuardado) {
-        setPrecioSopas(parseInt(precioGuardado));
-      }
+      const [mesasGuardadas, sabores, precio] = await Promise.all([
+        cargarMesas(),
+        leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
+        leerConfig('precio_sopas', MENU_DATA.sopas.price)
+      ]);
+      mesasRef.current = mesasGuardadas;
+      setMesas(mesasGuardadas);
+      setSaboresSopas(sabores);
+      setPrecioSopas(Number(precio));
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('Error cargando datos:', error.message);
+    }
+  }, []);
+
+  const guardarMesas = async (nuevasMesas) => {
+    const anteriores = mesasRef.current;
+    mesasRef.current = nuevasMesas;
+    setMesas(nuevasMesas);
+    try {
+      await guardarCambiosMesas(anteriores, nuevasMesas);
+    } catch (error) {
+      console.error('Error guardando mesas:', error.message);
+      alert('⚠️ No se pudo guardar la mesa. Revise la conexión a internet.');
+      cargarDatos();
     }
   };
 
-  const guardarMesas = (nuevasMesas) => {
-    try {
-      localStorage.setItem('santandereano_mesas', JSON.stringify(nuevasMesas));
-      setMesas(nuevasMesas);
-      // Disparar evento para sincronizar con otros meseros
-      window.dispatchEvent(new CustomEvent('mesasActualizadas', { detail: nuevasMesas }));
-    } catch (error) {
-      console.error('Error guardando mesas:', error);
-    }
-  };
-
-  const guardarVentas = (nuevasVentas) => {
-    try {
-      localStorage.setItem('santandereano_ventas', JSON.stringify(nuevasVentas));
-      setHistorialVentas(nuevasVentas);
-    } catch (error) {
-      console.error('Error guardando ventas:', error);
-    }
-  };
-
-  // Cargar datos al montar el componente
+  // Cargar datos al entrar y cada vez que otro dispositivo cambie algo
   React.useEffect(() => {
     cargarDatos();
-    
-    // Escuchar cambios de otros meseros
-    const handleMesasActualizadas = (event) => {
-      setMesas(event.detail);
-    };
-    
-    window.addEventListener('mesasActualizadas', handleMesasActualizadas);
-    
-    // Sincronizar cada 5 segundos
-    const interval = setInterval(() => {
-      cargarDatos();
-    }, 5000);
-    
+    const dejarDeEscuchar = escucharCambios(['mesas', 'config'], cargarDatos);
+    // Respaldo por si se pierde la conexión en vivo
+    const interval = setInterval(cargarDatos, 15000);
     return () => {
-      window.removeEventListener('mesasActualizadas', handleMesasActualizadas);
+      dejarDeEscuchar();
       clearInterval(interval);
     };
-  }, []);
+  }, [cargarDatos]);
 
   const mesasDelPiso = PISOS.find(p => p.number === pisoActual)?.mesas || 0;
 
@@ -103,7 +73,7 @@ export default function MeseroDashboard({ user, onLogout }) {
     setMesaSeleccionada(null);
   };
 
-  const procesarCobro = (mesaKey, mesaData) => {
+  const procesarCobro = async (mesaKey, mesaData) => {
     // Crear registro de venta
     const venta = {
       id: Date.now(),
@@ -115,9 +85,14 @@ export default function MeseroDashboard({ user, onLogout }) {
       metodoPago: mesaData.metodoPago || 'efectivo'
     };
 
-    // Agregar al historial y guardar
-    const nuevasVentas = [...historialVentas, venta];
-    guardarVentas(nuevasVentas);
+    // Guardar la venta
+    try {
+      await registrarVenta(venta);
+    } catch (error) {
+      console.error('Error guardando venta:', error.message);
+      alert('⚠️ No se pudo registrar la venta. Revise la conexión a internet e intente de nuevo.');
+      return;
+    }
 
     // Limpiar la mesa y guardar
     const nuevasMesas = { ...mesas };

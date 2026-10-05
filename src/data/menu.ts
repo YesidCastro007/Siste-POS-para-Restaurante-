@@ -57,3 +57,5 @@ export const PISOS = [
   { number: 2, mesas: 18 },
   { number: 3, mesas: 10 }
 ];
+
+export const SABORES_POR_DEFECTO = ['Sopa de costilla', 'Sancocho'];

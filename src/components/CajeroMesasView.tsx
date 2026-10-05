@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cargarMesas, escucharCambios } from '@/lib/datos';
 
 const PISOS = [
   { number: 1, mesas: 15 },
@@ -37,29 +38,20 @@ export default function CajeroMesasView() {
   const [pisoSeleccionado, setPisoSeleccionado] = useState(1);
 
   useEffect(() => {
-    const cargarMesas = () => {
+    const actualizarMesas = async () => {
       try {
-        const mesasGuardadas = localStorage.getItem('santandereano_mesas');
-        if (mesasGuardadas) {
-          setMesas(JSON.parse(mesasGuardadas));
-        }
+        setMesas(await cargarMesas());
       } catch (error) {
-        console.error('Error cargando mesas:', error);
+        console.error('Error cargando mesas:', error.message);
       }
     };
 
-    cargarMesas();
-    
-    const handleStorageChange = () => cargarMesas();
-    const handleMesasActualizadas = (event: any) => setMesas(event.detail);
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('mesasActualizadas', handleMesasActualizadas);
-    const interval = setInterval(cargarMesas, 2000);
-    
+    actualizarMesas();
+    const dejarDeEscuchar = escucharCambios(['mesas'], actualizarMesas);
+    const interval = setInterval(actualizarMesas, 15000);
+
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('mesasActualizadas', handleMesasActualizadas);
+      dejarDeEscuchar();
       clearInterval(interval);
     };
   }, []);
