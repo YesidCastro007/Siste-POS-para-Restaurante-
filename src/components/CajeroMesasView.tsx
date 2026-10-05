@@ -10,17 +10,18 @@ const PISOS = [
   { number: 3, mesas: 10 }
 ];
 
+// Colores sólidos con texto blanco, para que se lean bien sobre el fondo claro
 const MESERO_COLORS = {
-  blue: { bg: 'bg-blue-600/30', border: 'border-blue-600', text: 'text-blue-300' },
-  purple: { bg: 'bg-purple-600/30', border: 'border-purple-600', text: 'text-purple-300' },
-  orange: { bg: 'bg-orange-600/30', border: 'border-orange-600', text: 'text-orange-300' },
-  pink: { bg: 'bg-pink-600/30', border: 'border-pink-600', text: 'text-pink-300' },
-  yellow: { bg: 'bg-yellow-600/30', border: 'border-yellow-600', text: 'text-yellow-300' },
-  indigo: { bg: 'bg-indigo-600/30', border: 'border-indigo-600', text: 'text-indigo-300' },
-  teal: { bg: 'bg-teal-600/30', border: 'border-teal-600', text: 'text-teal-300' },
-  cyan: { bg: 'bg-cyan-600/30', border: 'border-cyan-600', text: 'text-cyan-300' },
-  rose: { bg: 'bg-rose-600/30', border: 'border-rose-600', text: 'text-rose-300' },
-  amber: { bg: 'bg-amber-600/30', border: 'border-amber-600', text: 'text-amber-300' }
+  blue: { bg: 'bg-blue-600', border: 'border-blue-700', text: 'text-white' },
+  purple: { bg: 'bg-purple-600', border: 'border-purple-700', text: 'text-white' },
+  orange: { bg: 'bg-orange-600', border: 'border-orange-700', text: 'text-white' },
+  pink: { bg: 'bg-pink-600', border: 'border-pink-700', text: 'text-white' },
+  yellow: { bg: 'bg-yellow-700', border: 'border-yellow-800', text: 'text-white' },
+  indigo: { bg: 'bg-indigo-600', border: 'border-indigo-700', text: 'text-white' },
+  teal: { bg: 'bg-teal-600', border: 'border-teal-700', text: 'text-white' },
+  cyan: { bg: 'bg-cyan-600', border: 'border-cyan-700', text: 'text-white' },
+  rose: { bg: 'bg-rose-600', border: 'border-rose-700', text: 'text-white' },
+  amber: { bg: 'bg-amber-700', border: 'border-amber-800', text: 'text-white' }
 };
 
 const getMeseroColorConfig = (meseroName: string) => {
@@ -122,14 +123,14 @@ export default function CajeroMesasView() {
                   className={`aspect-square rounded-xl p-2 sm:p-4 flex flex-col items-center justify-center border-2 ${
                     ocupada
                       ? `${colorConfig.bg} ${colorConfig.border} shadow-lg`
-                      : 'bg-green-100 border-green-400 opacity-50'
+                      : 'bg-green-50 border-green-300'
                   }`}
                 >
-                  <UtensilsCrossed className={`w-4 h-4 sm:w-6 sm:h-6 mb-1 sm:mb-2 ${ocupada ? colorConfig.text : 'text-green-600'}`} />
-                  <p className={`text-sm sm:text-lg font-bold ${ocupada ? colorConfig.text : 'text-green-600'}`}>{numeroMesa}</p>
+                  <UtensilsCrossed className={`w-4 h-4 sm:w-6 sm:h-6 mb-1 sm:mb-2 ${ocupada ? colorConfig.text : 'text-green-700'}`} />
+                  <p className={`text-sm sm:text-lg font-bold ${ocupada ? colorConfig.text : 'text-green-800'}`}>{numeroMesa}</p>
                   {ocupada ? (
                     <>
-                      <p className={`text-[10px] sm:text-xs ${colorConfig.text} truncate w-full text-center`}>{mesaData.mesero}</p>
+                      <p className={`text-[10px] sm:text-xs font-medium ${colorConfig.text} truncate w-full text-center`}>{mesaData.mesero}</p>
                       <p className={`text-xs sm:text-sm font-bold mt-0.5 sm:mt-1 ${colorConfig.text}`}>
                         ${mesaData.total.toLocaleString()}
                       </p>
@@ -138,7 +139,7 @@ export default function CajeroMesasView() {
                       </p>
                     </>
                   ) : (
-                    <p className="text-[10px] sm:text-xs text-green-600">Disponible</p>
+                    <p className="text-[10px] sm:text-xs text-green-700">Disponible</p>
                   )}
                 </div>
               );

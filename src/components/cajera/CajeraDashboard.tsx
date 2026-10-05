@@ -288,7 +288,7 @@ export default function CajeraDashboard({ user, onLogout }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       {/* Header */}
-      <div className="bg-white/5 backdrop-blur-md border-b border-red-900/20 sticky top-0 z-40">
+      <div className="bg-slate-900/95 backdrop-blur-md border-b border-red-900/40 shadow-lg sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
