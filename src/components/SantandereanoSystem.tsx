@@ -6,7 +6,7 @@ import LoginScreen from './login/LoginScreen';
 import MeseroDashboard from './mesero/MeseroDashboard';
 import CajeraDashboard from './cajera/CajeraDashboard';
 import DueñoDashboard from './dueno/DuenoDashboard';
-import { getUsersFromStorage, saveUsersToStorage, simpleHash, generateSalt, isValidEmail, createUser, verifyPassword } from '@/lib/auth';
+import { isValidEmail, iniciarSesion, sesionActual, cerrarSesion, registrarMesero, enviarCodigoRecuperacion, verificarCodigoRecuperacion, cambiarContrasena } from '@/lib/auth';
 
 export default function SantandereanoSystem() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -28,37 +28,12 @@ export default function SantandereanoSystem() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [resetStep, setResetStep] = useState(1);
 
-  // Cargar usuario desde sessionStorage al iniciar (cada pestaña tiene su propia sesión)
+  // Recuperar la sesión de Supabase guardada en esta pestaña
   React.useEffect(() => {
-    const savedUser = sessionStorage.getItem('santandereano_current_user');
-    if (savedUser) {
-      try {
-        const userData = JSON.parse(savedUser);
-        const users = getUsersFromStorage();
-        const userInDB = users[userData.email];
-        
-        console.log('=== VALIDACIÓN SESIÓN ===');
-        console.log('Email:', userData.email);
-        console.log('Usuario en DB:', userInDB ? 'Encontrado' : 'NO encontrado');
-        console.log('Rol guardado:', userData.role);
-        console.log('Rol en DB:', userInDB?.role);
-        
-        // Validar que el usuario existe y el rol coincide
-        if (userInDB && userInDB.active && userInDB.role === userData.role) {
-          console.log('✅ Sesión válida');
-          setCurrentUser(userData);
-        } else {
-          // Si el rol no coincide o el usuario no existe, cerrar sesión
-          console.warn('❌ Sesión inválida - cerrando sesión');
-          sessionStorage.removeItem('santandereano_current_user');
-          setCurrentUser(null);
-        }
-      } catch (error) {
-        console.error('Error cargando usuario:', error);
-        sessionStorage.removeItem('santandereano_current_user');
-      }
-    }
-    
+    sesionActual().then((usuario) => {
+      if (usuario) setCurrentUser(usuario);
+    });
+
     // Verificar bloqueo existente
     const blockUntil = localStorage.getItem('block_until');
     const attempts = localStorage.getItem('login_attempts');
@@ -110,34 +85,21 @@ export default function SantandereanoSystem() {
 
     setIsLoading(true);
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    let usuario = null;
+    let mensajeError = 'Credenciales incorrectas';
+    try {
+      usuario = await iniciarSesion(email, password);
+    } catch (error) {
+      mensajeError = error.message;
+    }
 
-    const users = getUsersFromStorage();
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = users[normalizedEmail];
-    
-    console.log('=== INTENTO DE LOGIN ===');
-    console.log('Email ingresado:', normalizedEmail);
-    console.log('Usuario encontrado:', user ? 'Sí' : 'No');
-    console.log('Usuarios disponibles:', Object.keys(users));
-    
-    if (user && user.active && verifyPassword(password, user.password, user.salt)) {
-      console.log('✅ Login exitoso');
-      const userData = { email: normalizedEmail, ...user };
-      setCurrentUser(userData);
-      sessionStorage.setItem('santandereano_current_user', JSON.stringify(userData));
+    if (usuario) {
+      setCurrentUser(usuario);
       
       setLoginAttempts(0);
       localStorage.removeItem('login_attempts');
       localStorage.removeItem('block_until');
     } else {
-      console.log('❌ Login fallido');
-      if (user) {
-        console.log('Usuario existe pero contraseña incorrecta');
-      } else {
-        console.log('Usuario no existe en la base de datos');
-      }
-      
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
       localStorage.setItem('login_attempts', newAttempts.toString());
@@ -164,7 +126,7 @@ export default function SantandereanoSystem() {
         
         alert('Demasiados intentos fallidos. Cuenta bloqueada por 30 segundos.');
       } else {
-        alert(`Credenciales incorrectas. Intentos restantes: ${3 - newAttempts}`);
+        alert(`${mensajeError.replace(/\.$/, '')}. Intentos restantes: ${3 - newAttempts}`);
       }
     }
     
@@ -186,10 +148,10 @@ export default function SantandereanoSystem() {
     
     try {
       setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      createUser(email, password, name);
-      alert('Usuario creado exitosamente como Mesero');
+      const { requiereConfirmacion } = await registrarMesero(email, password, name);
+      alert(requiereConfirmacion
+        ? 'Usuario creado como Mesero. Revise su correo para confirmar la cuenta antes de iniciar sesión.'
+        : 'Usuario creado exitosamente como Mesero');
       setShowRegister(false);
       setRegisterData({ name: '', email: '', password: '', confirmPassword: '' });
     } catch (error) {
@@ -200,84 +162,55 @@ export default function SantandereanoSystem() {
   };
 
   const handleForgotPassword = async () => {
-    if (resetStep === 1) {
-      if (!resetEmail.trim() || !isValidEmail(resetEmail)) {
-        alert('Por favor ingrese un email válido');
-        return;
-      }
-      
-      const users = getUsersFromStorage();
-      if (!users[resetEmail]) {
-        alert('No existe una cuenta con este email');
-        return;
-      }
-      
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      localStorage.setItem('reset_code_' + resetEmail, code);
-      localStorage.setItem('reset_code_expiry_' + resetEmail, (Date.now() + 300000).toString());
-      
-      alert(`Código de recuperación: ${code}\n\n⚠️ En producción, este código se enviaría por email.\nTiene 5 minutos para usarlo.`);
-      setResetStep(2);
-    } else if (resetStep === 2) {
-      if (!resetCode.trim()) {
-        alert('Ingrese el código de recuperación');
-        return;
-      }
-      
-      const storedCode = localStorage.getItem('reset_code_' + resetEmail);
-      const expiry = localStorage.getItem('reset_code_expiry_' + resetEmail);
-      
-      if (!storedCode || Date.now() > parseInt(expiry)) {
-        alert('El código ha expirado. Solicite uno nuevo.');
-        setResetStep(1);
+    try {
+      setIsLoading(true);
+      if (resetStep === 1) {
+        if (!resetEmail.trim() || !isValidEmail(resetEmail)) {
+          alert('Por favor ingrese un email válido');
+          return;
+        }
+        
+        await enviarCodigoRecuperacion(resetEmail);
+        alert('Si existe una cuenta con este email, le enviamos un código de recuperación. Revise su correo (también la carpeta de spam).');
+        setResetStep(2);
+      } else if (resetStep === 2) {
+        if (!resetCode.trim()) {
+          alert('Ingrese el código de recuperación');
+          return;
+        }
+        
+        await verificarCodigoRecuperacion(resetEmail, resetCode);
+        setResetStep(3);
+      } else if (resetStep === 3) {
+        if (!newPassword.trim() || !confirmNewPassword.trim()) {
+          alert('Complete todos los campos');
+          return;
+        }
+        
+        if (newPassword.length < 6) {
+          alert('La contraseña debe tener al menos 6 caracteres');
+          return;
+        }
+        
+        if (newPassword !== confirmNewPassword) {
+          alert('Las contraseñas no coinciden');
+          return;
+        }
+        
+        await cambiarContrasena(newPassword);
+        
+        alert('✅ Contraseña actualizada exitosamente');
+        setShowForgotPassword(false);
+        setResetEmail('');
         setResetCode('');
-        return;
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResetStep(1);
       }
-      
-      if (resetCode !== storedCode) {
-        alert('Código incorrecto');
-        return;
-      }
-      
-      setResetStep(3);
-    } else if (resetStep === 3) {
-      if (!newPassword.trim() || !confirmNewPassword.trim()) {
-        alert('Complete todos los campos');
-        return;
-      }
-      
-      if (newPassword.length < 6) {
-        alert('La contraseña debe tener al menos 6 caracteres');
-        return;
-      }
-      
-      if (newPassword !== confirmNewPassword) {
-        alert('Las contraseñas no coinciden');
-        return;
-      }
-      
-      const users = getUsersFromStorage();
-      const salt = generateSalt();
-      const hashedPassword = simpleHash(newPassword, salt);
-      
-      users[resetEmail] = {
-        ...users[resetEmail],
-        password: hashedPassword,
-        salt
-      };
-      
-      saveUsersToStorage(users);
-      
-      localStorage.removeItem('reset_code_' + resetEmail);
-      localStorage.removeItem('reset_code_expiry_' + resetEmail);
-      
-      alert('✅ Contraseña actualizada exitosamente');
-      setShowForgotPassword(false);
-      setResetEmail('');
-      setResetCode('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setResetStep(1);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -286,7 +219,7 @@ export default function SantandereanoSystem() {
     setEmail('');
     setPassword('');
     setRole('mesero');
-    sessionStorage.removeItem('santandereano_current_user');
+    cerrarSesion();
   };
 
   if (!currentUser) {

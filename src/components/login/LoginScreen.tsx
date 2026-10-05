@@ -268,7 +268,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                   </div>
                   <div className="text-center p-3 bg-blue-600/10 border border-blue-600/30 rounded-lg">
                     <p className="text-blue-200 text-xs">
-                      Se generará un código de recuperación que deberá ingresar en el siguiente paso.
+                      Le enviaremos un código de recuperación a su correo para ingresarlo en el siguiente paso.
                     </p>
                   </div>
                 </>
@@ -284,12 +284,12 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                       onChange={(e) => setResetCode(e.target.value)}
                       className="bg-white/5 border-red-900/30 text-white text-center text-2xl tracking-widest"
                       placeholder="000000"
-                      maxLength={6}
+                      maxLength={10}
                     />
                   </div>
                   <div className="text-center p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg">
                     <p className="text-yellow-200 text-xs">
-                      ⏱️ El código expira en 5 minutos
+                      📧 Revise su correo (también la carpeta de spam)
                     </p>
                   </div>
                 </>

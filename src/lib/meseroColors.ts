@@ -1,4 +1,4 @@
-import { getUsersFromStorage } from '@/lib/auth';
+import { getUsuariosCache } from '@/lib/auth';
 
 // Paleta de colores predefinidos para meseros (sin verde para evitar confusión con mesas disponibles)
 export const MESERO_COLORS = {
@@ -107,7 +107,7 @@ export const MESERO_COLORS = {
 // Generar color único para cada mesero basado en su email
 export const generateMeseroColor = (email: string) => {
   const colorKeys = Object.keys(MESERO_COLORS);
-  const users = getUsersFromStorage();
+  const users = getUsuariosCache();
   const meseros = Object.values(users).filter((u: any) => u.role === 'mesero');
   const meseroIndex = meseros.findIndex((m: any) => (m as any).email === email);
   
@@ -124,7 +124,7 @@ export const generateMeseroColor = (email: string) => {
 
 // Obtener configuración de color del mesero
 export const getMeseroColorConfig = (meseroName: string) => {
-  const users = getUsersFromStorage();
+  const users = getUsuariosCache();
   const mesero = Object.values(users).find((user: any) => user.name === meseroName);
   const colorKey = mesero ? generateMeseroColor((mesero as any).email) : 'blue';
   return MESERO_COLORS[colorKey as keyof typeof MESERO_COLORS] || MESERO_COLORS.blue;
