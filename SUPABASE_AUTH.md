@@ -93,16 +93,7 @@ Google no deja usar tu contraseña normal; hay que crear una especial solo para 
 
 1. Ve a **Authentication → Emails → Templates** y elige **Reset Password**.
 2. En **Subject** escribe: `Recupera tu contraseña - Santandereano SAS`
-3. En el cuerpo (**Message body**) borra lo que hay y pega:
-
-```html
-<h2>Recuperar contraseña</h2>
-<p>Hola,</p>
-<p>Recibimos una solicitud para cambiar la contraseña de tu cuenta en el sistema de Santandereano SAS.</p>
-<p><a href="{{ .ConfirmationURL }}">Crear una contraseña nueva</a></p>
-<p>Si no fuiste tú, ignora este correo; tu contraseña sigue igual.</p>
-```
-
+3. En el cuerpo (**Message body**) borra lo que hay y pega todo el contenido de `supabase/templates/recuperar-contrasena.html`. Es un correo con el nombre y los colores del restaurante, un botón para crear la contraseña nueva y el enlace de respaldo.
 4. Pulsa **Save changes**.
 
 ### 6.4 Probar
