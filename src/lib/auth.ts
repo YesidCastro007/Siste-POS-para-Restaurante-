@@ -49,6 +49,18 @@ export const cargarUsuarios = async () => {
   return usuariosCache;
 };
 
+// Solo el dueño: cambia el rol (mesero o cajera) y el estado de otro usuario.
+// La base de datos verifica el permiso (ver supabase/migrations/004_dueno_gestiona_usuarios.sql).
+export const actualizarUsuario = async (id: string, role: Rol, active: boolean) => {
+  const { error } = await getClient().rpc('actualizar_usuario', { usuario: id, nuevo_rol: role, activo: active });
+  if (error) {
+    if (error.message.includes('actualizar_usuario')) {
+      throw new Error('Falta ejecutar 004_dueno_gestiona_usuarios.sql en Supabase.');
+    }
+    throw new Error(error.message);
+  }
+};
+
 const obtenerPerfil = async (userId: string): Promise<Usuario> => {
   const { data, error } = await getClient()
     .from('profiles')

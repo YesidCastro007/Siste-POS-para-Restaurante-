@@ -17,6 +17,7 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 2. Si nunca ejecutaste `supabase/migrations/001_initial_schema.sql`, pega su contenido y pulsa **Run**.
 3. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**.
 4. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
+5. Pega el contenido de `supabase/migrations/004_dueno_gestiona_usuarios.sql` y pulsa **Run**. Esto deja que el dueño cambie roles y desactive usuarios desde su panel.
 
 ## 3. Configurar las direcciones de la app
 
@@ -52,17 +53,12 @@ Este archivo no se sube a GitHub (está en `.gitignore`).
 2. Escribe el correo y una contraseña nueva (no reutilices las que estaban en el código), y marca **Auto Confirm User**.
 3. Repite para cada persona del equipo. Todos quedan como **mesero**.
 
-Para dar otro rol, ve a **SQL Editor** y ejecuta, cambiando el correo:
+Para hacer a alguien **cajera** o para desactivarlo sin borrarlo, entra como dueño y usa la sección **Usuarios** del panel.
+
+Desde el panel no se puede nombrar a otro **dueño** (por seguridad). Para eso ve a **SQL Editor** y ejecuta, cambiando el correo:
 
 ```sql
-UPDATE public.profiles SET role = 'dueño' WHERE email = 'admin@santandereano.com';
-UPDATE public.profiles SET role = 'cajera' WHERE email = 'administrivocaja@santandereano.com';
-```
-
-Para desactivar a alguien sin borrarlo:
-
-```sql
-UPDATE public.profiles SET active = false WHERE email = 'correo@ejemplo.com';
+UPDATE public.profiles SET role = 'dueño' WHERE email = 'correo@ejemplo.com';
 ```
 
 Para ver todos los usuarios con su rol: **Table Editor → profiles**.
