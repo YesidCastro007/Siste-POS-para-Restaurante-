@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MENU_DATA } from '@/data/menu';
+import { MENU_DATA, SABORES_POR_DEFECTO } from '@/data/menu';
+import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
 import CajeroMesasView from '@/components/CajeroMesasView';
 import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
 
@@ -26,84 +27,57 @@ export default function CajeraDashboard({ user, onLogout }) {
   const [numeroWhatsApp, setNumeroWhatsApp] = useState('');
   const [mostrarConfigWhatsApp, setMostrarConfigWhatsApp] = useState(false);
 
-  const cargarDatos = React.useCallback(() => {
+  const [numeroConfigurado, setNumeroConfigurado] = useState('');
+
+  // Ventas, sabores, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
+  const numeroCarga = React.useRef(0);
+  const cargarDatos = React.useCallback(async () => {
+    const carga = ++numeroCarga.current;
     try {
-      const ventasGuardadas = localStorage.getItem('santandereano_ventas');
-      const saboresGuardados = localStorage.getItem('santandereano_sabores_sopas');
-      
-      if (ventasGuardadas) {
-        setVentasHoy(JSON.parse(ventasGuardadas));
-      }
-      
-      if (saboresGuardados) {
-        setSaboresSopas(JSON.parse(saboresGuardados));
-      } else {
-        const saboresDefault = ['Sopa de costilla', 'Sancocho'];
-        setSaboresSopas(saboresDefault);
-        localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(saboresDefault));
-      }
-      
-      const precioGuardado = localStorage.getItem('santandereano_precio_sopas');
-      if (precioGuardado) {
-        setPrecioSopas(parseInt(precioGuardado));
-      }
+      const [ventas, sabores, precio, estadoCaja, numero] = await Promise.all([
+        cargarVentas(),
+        leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
+        leerConfig('precio_sopas', MENU_DATA.sopas.price),
+        leerConfig('caja_estado', { abierta: false, fechaApertura: null }),
+        leerConfig('whatsapp_numero', '')
+      ]);
+      if (carga !== numeroCarga.current) return;
+      setVentasHoy(ventas);
+      setSaboresSopas(sabores);
+      setPrecioSopas(Number(precio));
+      setCajaAbierta(!!estadoCaja.abierta);
+      setFechaApertura(estadoCaja.fechaApertura);
+      setNumeroConfigurado(numero);
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('Error cargando datos:', error.message);
     }
   }, []);
 
-  React.useEffect(() => {
-    cargarDatos();
-    const estadoCaja = localStorage.getItem('santandereano_caja_estado');
-    if (estadoCaja) {
-      const estado = JSON.parse(estadoCaja);
-      setCajaAbierta(estado.abierta);
-      setFechaApertura(estado.fechaApertura);
-    }
-    
-    const handleStorageChange = () => cargarDatos();
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        cargarDatos();
-        const estadoCaja = localStorage.getItem('santandereano_caja_estado');
-        if (estadoCaja) {
-          const estado = JSON.parse(estadoCaja);
-          setCajaAbierta(estado.abierta);
-          setFechaApertura(estado.fechaApertura);
-        }
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', cargarDatos);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    const interval = setInterval(() => {
-      cargarDatos();
-      const estadoCaja = localStorage.getItem('santandereano_caja_estado');
-      if (estadoCaja) {
-        const estado = JSON.parse(estadoCaja);
-        setCajaAbierta(estado.abierta);
-        setFechaApertura(estado.fechaApertura);
-      }
-    }, 500);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', cargarDatos);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(interval);
-    };
-  }, [cargarDatos]);
+  React.useEffect(() => mantenerActualizado(['ventas', 'config'], cargarDatos), [cargarDatos]);
 
-  const abrirCaja = () => {
+  // Guarda un ajuste compartido; si falla, avisa y vuelve a cargar lo que hay en Supabase
+  const guardarAjuste = async (key, value) => {
+    try {
+      await guardarConfig(key, value);
+      return true;
+    } catch (error) {
+      console.error(`Error guardando ${key}:`, error.message);
+      alert('⚠️ No se pudo guardar el cambio. Revise la conexión a internet.');
+      cargarDatos();
+      return false;
+    }
+  };
+
+  const abrirCaja = async () => {
     const ahora = new Date().toISOString();
-    setCajaAbierta(true);
-    setFechaApertura(ahora);
-    localStorage.setItem('santandereano_caja_estado', JSON.stringify({
+    const guardado = await guardarAjuste('caja_estado', {
       abierta: true,
       fechaApertura: ahora,
       cajero: user.name
-    }));
+    });
+    if (!guardado) return;
+    setCajaAbierta(true);
+    setFechaApertura(ahora);
     alert(`✅ Caja abierta exitosamente\nCajero: ${user.name}\nHora: ${new Date(ahora).toLocaleString()}`);
   };
 
@@ -114,22 +88,27 @@ export default function CajeraDashboard({ user, onLogout }) {
     setMostrarReporte(true);
   };
 
-  const confirmarCierreCaja = () => {
-    // Guardar reporte en historial
-    const historialReportes = JSON.parse(localStorage.getItem('santandereano_historial_cierres') || '[]');
-    historialReportes.push({
-      ...reporteCierre,
-      id: Date.now()
+  const confirmarCierreCaja = async () => {
+    const guardado = await guardarAjuste('caja_estado', {
+      abierta: false,
+      fechaApertura: null
     });
-    localStorage.setItem('santandereano_historial_cierres', JSON.stringify(historialReportes));
+    if (!guardado) return;
+
+    // Guardar reporte en historial
+    try {
+      const historialReportes = await leerConfig('historial_cierres', []);
+      await guardarConfig('historial_cierres', [...historialReportes, { ...reporteCierre, id: Date.now() }]);
+    } catch (error) {
+      console.error('Error guardando historial de cierres:', error.message);
+    }
     
     // Generar PDF
     const pdf = generarReportePDF(reporteCierre);
     
     // Si hay número de WhatsApp configurado, enviar
-    const numeroGuardado = localStorage.getItem('santandereano_whatsapp_numero');
-    if (numeroGuardado) {
-      enviarReportePorWhatsApp(pdf, numeroGuardado);
+    if (numeroConfigurado) {
+      enviarReportePorWhatsApp(pdf, numeroConfigurado);
     } else {
       // Solo descargar el PDF
       pdf.save(`Reporte_Cierre_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -139,15 +118,11 @@ export default function CajeraDashboard({ user, onLogout }) {
     setFechaApertura(null);
     setMostrarReporte(false);
     setReporteCierre(null);
-    localStorage.setItem('santandereano_caja_estado', JSON.stringify({
-      abierta: false,
-      fechaApertura: null
-    }));
     
     alert('✅ Caja cerrada exitosamente. El reporte ha sido generado en PDF.');
   };
 
-  const guardarNumeroWhatsApp = () => {
+  const guardarNumeroWhatsApp = async () => {
     if (!numeroWhatsApp.trim()) {
       alert('Por favor ingrese un número de teléfono');
       return;
@@ -159,7 +134,8 @@ export default function CajeraDashboard({ user, onLogout }) {
       return;
     }
     
-    localStorage.setItem('santandereano_whatsapp_numero', numeroLimpio);
+    if (!(await guardarAjuste('whatsapp_numero', numeroLimpio))) return;
+    setNumeroConfigurado(numeroLimpio);
     setMostrarConfigWhatsApp(false);
     alert('✅ Número de WhatsApp guardado exitosamente');
   };
@@ -263,7 +239,7 @@ export default function CajeraDashboard({ user, onLogout }) {
     
     const nuevosSabores = [...saboresSopas, nuevoSabor.trim()];
     setSaboresSopas(nuevosSabores);
-    localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(nuevosSabores));
+    guardarAjuste('sabores_sopas', nuevosSabores);
     setNuevoSabor('');
     setMostrarAgregarSabor(false);
   };
@@ -272,7 +248,7 @@ export default function CajeraDashboard({ user, onLogout }) {
     if (confirm(`¿Está seguro de eliminar "${sabor}"?`)) {
       const nuevosSabores = saboresSopas.filter(s => s !== sabor);
       setSaboresSopas(nuevosSabores);
-      localStorage.setItem('santandereano_sabores_sopas', JSON.stringify(nuevosSabores));
+      guardarAjuste('sabores_sopas', nuevosSabores);
     }
   };
 
@@ -312,7 +288,7 @@ export default function CajeraDashboard({ user, onLogout }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       {/* Header */}
-      <div className="bg-white/5 backdrop-blur-md border-b border-red-900/20 sticky top-0 z-40">
+      <div className="bg-slate-900/95 backdrop-blur-md border-b border-red-900/40 shadow-lg sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -542,8 +518,7 @@ export default function CajeraDashboard({ user, onLogout }) {
               </CardTitle>
               <Button
                 onClick={() => {
-                  const numeroGuardado = localStorage.getItem('santandereano_whatsapp_numero');
-                  setNumeroWhatsApp(numeroGuardado || '');
+                  setNumeroWhatsApp(numeroConfigurado);
                   setMostrarConfigWhatsApp(true);
                 }}
                 className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
@@ -559,8 +534,8 @@ export default function CajeraDashboard({ user, onLogout }) {
                 <div>
                   <p className="text-white font-medium">Número configurado:</p>
                   <p className="text-gray-300 text-sm mt-1">
-                    {localStorage.getItem('santandereano_whatsapp_numero') 
-                      ? `+57 ${localStorage.getItem('santandereano_whatsapp_numero')}` 
+                    {numeroConfigurado
+                      ? `+57 ${numeroConfigurado}`
                       : 'No configurado'}
                   </p>
                 </div>

@@ -16,6 +16,7 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 1. Ve a **SQL Editor → New query**.
 2. Si nunca ejecutaste `supabase/migrations/001_initial_schema.sql`, pega su contenido y pulsa **Run**.
 3. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**.
+4. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
 
 ## 3. Configurar las direcciones de la app
 
@@ -70,4 +71,4 @@ Para ver todos los usuarios con su rol: **Table Editor → profiles**.
 
 - Cualquier persona puede registrarse desde la pantalla de login, siempre como mesero. Si quieres que solo el dueño cree cuentas, desactiva **Allow new users to sign up** en **Authentication → Sign In / Providers**.
 - Cada pestaña del navegador tiene su propia sesión, igual que antes.
-- Las mesas y ventas siguen guardándose en cada dispositivo (localStorage). Compartirlas entre dispositivos es el siguiente paso.
+- Las mesas, ventas, sabores de sopa, estado de la caja y número de WhatsApp se guardan en Supabase, así que todos los dispositivos ven lo mismo y se actualiza al instante.
