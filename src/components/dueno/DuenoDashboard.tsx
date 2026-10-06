@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, cargarVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
-import { cargarUsuarios, type Usuario } from '@/lib/auth';
+import { actualizarUsuario, cargarUsuarios, type Rol, type Usuario } from '@/lib/auth';
 import {
   PERIODOS, type Periodo, type Fila, filtrarPorPeriodo, resumen, porMesero, porMetodo,
   productosMasVendidos, ventasPorDia, formatoPesos
@@ -70,6 +70,67 @@ function Ranking({ titulo, filas, contar, vacio }: { titulo: string; filas: Fila
   );
 }
 
+// Una persona del equipo. A meseros y cajeras el dueño les cambia el rol o los desactiva;
+// los dueños (incluido uno mismo) solo se muestran.
+function FilaUsuario({ usuario, editable, alCambiar }: { usuario: Usuario; editable: boolean; alCambiar: () => void }) {
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  const guardar = async (role: Rol, active: boolean) => {
+    setGuardando(true);
+    setError('');
+    try {
+      await actualizarUsuario(usuario.id, role, active);
+      alCambiar();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`text-sm font-medium truncate ${usuario.active ? 'text-white' : 'text-gray-500 line-through'}`}>{usuario.name}</p>
+          <p className="text-gray-400 text-xs truncate">{usuario.email}</p>
+        </div>
+        {editable ? (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex rounded-md bg-white/10 p-0.5">
+              {(['mesero', 'cajera'] as Rol[]).map(rol => (
+                <button
+                  key={rol}
+                  disabled={guardando || usuario.role === rol}
+                  onClick={() => guardar(rol, usuario.active)}
+                  className={`px-3 py-1 text-xs rounded ${usuario.role === rol ? 'bg-amber-500 text-slate-900 font-semibold' : 'text-gray-200 hover:bg-white/10'}`}
+                >
+                  {NOMBRE_ROL[rol]}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              disabled={guardando}
+              onClick={() => guardar(usuario.role, !usuario.active)}
+              className={usuario.active ? 'h-7 text-xs bg-transparent border border-red-500 text-red-300 hover:bg-red-600 hover:text-white' : 'h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white'}
+            >
+              {usuario.active ? 'Desactivar' : 'Activar'}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-100">{NOMBRE_ROL[usuario.role] ?? usuario.role}</span>
+            {!usuario.active && <span className="text-xs px-2 py-1 rounded-full bg-red-600/30 text-red-100">Inactivo</span>}
+          </div>
+        )}
+      </div>
+      {error && <p className="text-red-300 text-xs mt-2">{error}</p>}
+    </div>
+  );
+}
+
 function TooltipDia({ active, payload }: { active?: boolean; payload?: { payload: { etiqueta: string; total: number; ordenes: number } }[] }) {
   if (!active || !payload?.length) return null;
   const dia = payload[0].payload;
@@ -88,6 +149,8 @@ export default function DueñoDashboard({ user, onLogout }) {
   const [mesas, setMesas] = useState<Mesas>({});
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [error, setError] = useState('');
+  const recargarRef = React.useRef<() => void>(() => {});
+  const recargar = () => recargarRef.current();
 
   React.useEffect(() => {
     let numeroCarga = 0;
@@ -105,7 +168,8 @@ export default function DueñoDashboard({ user, onLogout }) {
         setError('No se pudieron cargar los datos. Revise la conexión a internet.');
       }
     };
-    return mantenerActualizado(['ventas', 'mesas'], cargar, 15000);
+    recargarRef.current = cargar;
+    return mantenerActualizado(['ventas', 'mesas', 'profiles'], cargar, 15000);
   }, []);
 
   const ventasDelPeriodo = useMemo(() => filtrarPorPeriodo(ventas, periodo), [ventas, periodo]);
@@ -196,21 +260,12 @@ export default function DueñoDashboard({ user, onLogout }) {
               <Users className="w-5 h-5 mr-2 text-gray-300" />
               Usuarios ({usuarios.length})
             </CardTitle>
-            <p className="text-gray-400 text-xs">Para cambiar un rol o desactivar a alguien, sigue los pasos de SUPABASE_AUTH.md.</p>
+            <p className="text-gray-400 text-xs">Elige el rol de cada persona. Quien esté desactivado no puede iniciar sesión.</p>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 pt-2">
             <div className="divide-y divide-white/10">
               {usuarios.map(u => (
-                <div key={u.id} className="flex items-center justify-between py-3 gap-3">
-                  <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{u.name}</p>
-                    <p className="text-gray-400 text-xs truncate">{u.email}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-100">{NOMBRE_ROL[u.role] ?? u.role}</span>
-                    {!u.active && <span className="text-xs px-2 py-1 rounded-full bg-red-600/30 text-red-100">Inactivo</span>}
-                  </div>
-                </div>
+                <FilaUsuario key={u.id} usuario={u} editable={u.role !== 'dueño' && u.id !== user.id} alCambiar={recargar} />
               ))}
             </div>
           </CardContent>
