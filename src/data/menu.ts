@@ -17,7 +17,7 @@ export const MENU_DATA = {
   },
   sopas: {
     price: 10000, // Precio fijo
-    sabores: [] // Se cargará dinámicamente desde localStorage
+    sabores: [] // Se cargan desde Supabase (config sabores_sopas)
   },
   bebidas: {
     'Jugos Hit y Gaseosas 350ml': [
