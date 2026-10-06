@@ -263,13 +263,15 @@ export default function CajeraDashboard({ user, onLogout }) {
       switch (filtroFecha) {
         case 'hoy':
           return fechaVenta >= inicioHoy && coincideMesa;
-        case 'semana':
+        case 'semana': {
           const inicioSemana = new Date(inicioHoy);
           inicioSemana.setDate(inicioSemana.getDate() - 7);
           return fechaVenta >= inicioSemana && coincideMesa;
-        case 'mes':
+        }
+        case 'mes': {
           const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
           return fechaVenta >= inicioMes && coincideMesa;
+        }
         default:
           return coincideMesa;
       }
