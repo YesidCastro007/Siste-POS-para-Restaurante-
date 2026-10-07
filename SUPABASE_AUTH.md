@@ -18,6 +18,7 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 3. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**.
 4. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
 5. Pega el contenido de `supabase/migrations/004_dueno_gestiona_usuarios.sql` y pulsa **Run**. Esto deja que el dueño cambie roles y desactive usuarios desde su panel.
+6. Pega el contenido de `supabase/migrations/005_robustez.sql` y pulsa **Run**. Esto hace que solo el personal **activo** pueda ver y cambiar datos, y que las cuentas nuevas queden inactivas hasta que el dueño las active.
 
 ## 3. Configurar las direcciones de la app
 
@@ -51,15 +52,17 @@ Este archivo no se sube a GitHub (está en `.gitignore`).
 
 1. Ve a **Authentication → Users → Add user → Create new user**.
 2. Escribe el correo y una contraseña nueva (no reutilices las que estaban en el código), y marca **Auto Confirm User**.
-3. Repite para cada persona del equipo. Todos quedan como **mesero**.
+3. Repite para cada persona del equipo. Todos quedan como **mesero inactivo**, igual que quien se registra desde la app.
 
-Para hacer a alguien **cajera** o para desactivarlo sin borrarlo, entra como dueño y usa la sección **Usuarios** del panel.
+Para **activar** una cuenta nueva, hacer a alguien **cajera** o desactivarlo sin borrarlo, entra como dueño y usa la sección **Usuarios** del panel.
 
 Desde el panel no se puede nombrar a otro **dueño** (por seguridad). Para eso ve a **SQL Editor** y ejecuta, cambiando el correo:
 
 ```sql
-UPDATE public.profiles SET role = 'dueño' WHERE email = 'correo@ejemplo.com';
+UPDATE public.profiles SET role = 'dueño', active = true WHERE email = 'correo@ejemplo.com';
 ```
+
+El primer dueño de una instalación nueva se crea así: se registra o se crea en **Authentication → Users** y luego se ejecuta ese mismo comando.
 
 Para ver todos los usuarios con su rol: **Table Editor → profiles**.
 

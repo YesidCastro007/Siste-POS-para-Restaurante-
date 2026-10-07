@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, cargarVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
 import { actualizarUsuario, cargarUsuarios, type Rol, type Usuario } from '@/lib/auth';
 import {
-  PERIODOS, type Periodo, type Fila, filtrarPorPeriodo, resumen, porMesero, porMetodo,
+  PERIODOS, inicioDelPeriodo, type Periodo, type Fila, filtrarPorPeriodo, resumen, porMesero, porMetodo,
   productosMasVendidos, ventasPorDia, formatoPesos
 } from '@/lib/estadisticas';
 
@@ -19,6 +19,15 @@ const diasDelGrafico = (periodo: Periodo) => {
   if (periodo === 'mes') return new Date().getDate();
   if (periodo === 'todo') return 30;
   return 7;
+};
+
+// Primer día que hace falta: el inicio del periodo o el primer día de la gráfica, el que sea antes
+const desdeParaCargar = (periodo: Periodo): Date | null => {
+  const inicio = inicioDelPeriodo(periodo);
+  if (!inicio) return null;
+  const hoy = new Date();
+  const inicioGrafico = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - (diasDelGrafico(periodo) - 1));
+  return inicio < inicioGrafico ? inicio : inicioGrafico;
 };
 
 function Indicador({ titulo, valor, detalle, Icono }) {
@@ -152,12 +161,18 @@ export default function DueñoDashboard({ user, onLogout }) {
   const recargarRef = React.useRef<() => void>(() => {});
   const recargar = () => recargarRef.current();
 
+  // Solo se descargan las ventas del periodo elegido y de los días de la gráfica
+  const periodoRef = React.useRef(periodo);
+  periodoRef.current = periodo;
+
   React.useEffect(() => {
     let numeroCarga = 0;
     const cargar = async () => {
       const carga = ++numeroCarga;
       try {
-        const [ventasGuardadas, mesasGuardadas, perfiles] = await Promise.all([cargarVentas(), cargarMesas(), cargarUsuarios()]);
+        const [ventasGuardadas, mesasGuardadas, perfiles] = await Promise.all([
+          cargarVentas(desdeParaCargar(periodoRef.current)), cargarMesas(), cargarUsuarios()
+        ]);
         if (carga !== numeroCarga) return;
         setVentas(ventasGuardadas);
         setMesas(mesasGuardadas);
@@ -171,6 +186,12 @@ export default function DueñoDashboard({ user, onLogout }) {
     recargarRef.current = cargar;
     return mantenerActualizado(['ventas', 'mesas', 'profiles'], cargar, 15000);
   }, []);
+
+  const primeraCarga = React.useRef(true);
+  React.useEffect(() => {
+    if (primeraCarga.current) { primeraCarga.current = false; return; }
+    recargar();
+  }, [periodo]);
 
   const ventasDelPeriodo = useMemo(() => filtrarPorPeriodo(ventas, periodo), [ventas, periodo]);
   const totales = resumen(ventasDelPeriodo);

@@ -78,7 +78,7 @@ const perfilActivo = async (userId: string): Promise<Usuario> => {
   const perfil = await obtenerPerfil(userId);
   if (!perfil.active) {
     await getClient().auth.signOut();
-    throw new Error('Este usuario está inactivo. Contacte al administrador.');
+    throw new Error('Esta cuenta no está activa. Pídale al dueño que la active desde su panel.');
   }
   await cargarUsuarios();
   return perfil;
@@ -117,7 +117,8 @@ export const cerrarSesion = async () => {
   if (supabase) await supabase.auth.signOut();
 };
 
-// Registro público: siempre crea meseros (el rol lo asigna la base de datos)
+// Registro público: siempre crea meseros inactivos (el rol y el estado los asigna la base de datos);
+// el dueño los activa desde su panel
 export const registrarMesero = async (email: string, password: string, name: string) => {
   const normalizedEmail = normalizarEmail(email);
 

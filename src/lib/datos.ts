@@ -48,13 +48,27 @@ export const liberarMesa = async (mesaKey: string) => {
 
 // ---------- Ventas ----------
 
-export const cargarVentas = async (): Promise<Venta[]> => {
-  const { data, error } = await getClient()
-    .from('ventas')
-    .select('id, fecha, mesa, mesero, pedidos, total, metodo_pago')
-    .order('fecha', { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(fila => ({
+// Supabase entrega como máximo 1.000 filas por consulta, así que las ventas se piden por páginas.
+const VENTAS_POR_PAGINA = 1000;
+
+// Carga las ventas desde una fecha (o todas si desde es null), de la más nueva a la más vieja.
+// Pedir solo el periodo que se muestra evita descargar toda la historia en cada actualización.
+export const cargarVentas = async (desde: Date | null = null): Promise<Venta[]> => {
+  const filas = [];
+  for (let pagina = 0; ; pagina++) {
+    let consulta = getClient()
+      .from('ventas')
+      .select('id, fecha, mesa, mesero, pedidos, total, metodo_pago')
+      .order('fecha', { ascending: false })
+      .order('id', { ascending: false })
+      .range(pagina * VENTAS_POR_PAGINA, (pagina + 1) * VENTAS_POR_PAGINA - 1);
+    if (desde) consulta = consulta.gte('fecha', desde.toISOString());
+    const { data, error } = await consulta;
+    if (error) throw new Error(error.message);
+    filas.push(...(data ?? []));
+    if (!data || data.length < VENTAS_POR_PAGINA) break;
+  }
+  return filas.map(fila => ({
     id: Number(fila.id),
     fecha: fila.fecha,
     mesa: fila.mesa,

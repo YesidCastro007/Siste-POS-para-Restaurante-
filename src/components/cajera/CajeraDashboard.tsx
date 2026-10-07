@@ -10,6 +10,16 @@ import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/
 import CajeroMesasView from '@/components/CajeroMesasView';
 import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
 
+// Fecha desde la que se muestran las ventas según el periodo elegido (null = todas)
+const inicioDelFiltro = (filtro: string): Date | null => {
+  const hoy = new Date();
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  if (filtro === 'hoy') return inicioHoy;
+  if (filtro === 'semana') return new Date(inicioHoy.getFullYear(), inicioHoy.getMonth(), inicioHoy.getDate() - 7);
+  if (filtro === 'mes') return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  return null;
+};
+
 export default function CajeraDashboard({ user, onLogout }) {
   const [ventasHoy, setVentasHoy] = useState([]);
   const [saboresSopas, setSaboresSopas] = useState([]);
@@ -30,15 +40,22 @@ export default function CajeraDashboard({ user, onLogout }) {
   const [numeroConfigurado, setNumeroConfigurado] = useState('');
 
   // Ventas, sabores, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
+  // Solo se descargan las ventas que se muestran: las del turno si la caja está abierta,
+  // o las del periodo elegido si está cerrada
+  const filtroFechaRef = React.useRef(filtroFecha);
+  filtroFechaRef.current = filtroFecha;
   const numeroCarga = React.useRef(0);
   const cargarDatos = React.useCallback(async () => {
     const carga = ++numeroCarga.current;
     try {
-      const [ventas, sabores, precio, estadoCaja, numero] = await Promise.all([
-        cargarVentas(),
+      const estadoCaja = await leerConfig('caja_estado', { abierta: false, fechaApertura: null });
+      const desde = estadoCaja.abierta && estadoCaja.fechaApertura
+        ? new Date(estadoCaja.fechaApertura)
+        : inicioDelFiltro(filtroFechaRef.current);
+      const [ventas, sabores, precio, numero] = await Promise.all([
+        cargarVentas(desde),
         leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
         leerConfig('precio_sopas', MENU_DATA.sopas.price),
-        leerConfig('caja_estado', { abierta: false, fechaApertura: null }),
         leerConfig('whatsapp_numero', '')
       ]);
       if (carga !== numeroCarga.current) return;
@@ -54,6 +71,13 @@ export default function CajeraDashboard({ user, onLogout }) {
   }, []);
 
   React.useEffect(() => mantenerActualizado(['ventas', 'config'], cargarDatos), [cargarDatos]);
+
+  // Al cambiar de periodo se piden las ventas de ese periodo
+  const primeraCarga = React.useRef(true);
+  React.useEffect(() => {
+    if (primeraCarga.current) { primeraCarga.current = false; return; }
+    cargarDatos();
+  }, [filtroFecha, cargarDatos]);
 
   // Guarda un ajuste compartido; si falla, avisa y vuelve a cargar lo que hay en Supabase
   const guardarAjuste = async (key, value) => {
@@ -253,28 +277,10 @@ export default function CajeraDashboard({ user, onLogout }) {
   };
 
   const filtrarVentas = () => {
-    const hoy = new Date();
-    const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-    
+    const desde = inicioDelFiltro(filtroFecha);
     return ventasHoy.filter(venta => {
-      const fechaVenta = new Date(venta.fecha);
       const coincideMesa = busquedaMesa === '' || venta.mesa.toLowerCase().includes(busquedaMesa.toLowerCase());
-      
-      switch (filtroFecha) {
-        case 'hoy':
-          return fechaVenta >= inicioHoy && coincideMesa;
-        case 'semana': {
-          const inicioSemana = new Date(inicioHoy);
-          inicioSemana.setDate(inicioSemana.getDate() - 7);
-          return fechaVenta >= inicioSemana && coincideMesa;
-        }
-        case 'mes': {
-          const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-          return fechaVenta >= inicioMes && coincideMesa;
-        }
-        default:
-          return coincideMesa;
-      }
+      return coincideMesa && (!desde || new Date(venta.fecha) >= desde);
     });
   };
 
