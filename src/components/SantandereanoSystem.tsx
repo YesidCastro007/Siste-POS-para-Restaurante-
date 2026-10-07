@@ -164,8 +164,8 @@ export default function SantandereanoSystem() {
       setIsLoading(true);
       const { requiereConfirmacion } = await registrarMesero(email, password, name);
       alert(requiereConfirmacion
-        ? 'Usuario creado como Mesero. Revise su correo para confirmar la cuenta antes de iniciar sesión.'
-        : 'Usuario creado exitosamente como Mesero');
+        ? 'Usuario creado como Mesero. Revise su correo para confirmar la cuenta. Después, el dueño debe activarla desde su panel para que pueda entrar.'
+        : 'Usuario creado como Mesero. El dueño debe activar la cuenta desde su panel para que pueda entrar.');
       setShowRegister(false);
       setRegisterData({ name: '', email: '', password: '', confirmPassword: '' });
     } catch (error) {
