@@ -30,7 +30,7 @@ Cuando alguien olvida su contraseña, Supabase le envía un correo con un enlace
    - `http://localhost:8080/**` (cuando pruebas en tu computador)
 4. Guarda.
 
-**Importante sobre los correos:** sin un servidor de correo propio (SMTP), Supabase solo envía correos a los miembros de tu organización en Supabase (por ejemplo, tu propio correo) y muy pocos por hora. Sirve para probar. Para que los meseros reciban sus correos de recuperación y confirmación, configura un SMTP en **Authentication → Emails → SMTP Settings** (por ejemplo con [Resend](https://resend.com), que tiene plan gratuito).
+**Importante sobre los correos:** sin un servidor de correo propio (SMTP), Supabase solo envía correos a los miembros de tu organización en Supabase (por ejemplo, tu propio correo) y muy pocos por hora. Para que los meseros y la cajera reciban el correo de recuperación, sigue la sección **6. Enviar los correos con Gmail**.
 
 Opcional: en **Authentication → Sign In / Providers → Email** puedes desactivar **Confirm email** para que los meseros nuevos entren sin confirmar su correo.
 
@@ -62,6 +62,47 @@ UPDATE public.profiles SET role = 'dueño' WHERE email = 'correo@ejemplo.com';
 ```
 
 Para ver todos los usuarios con su rol: **Table Editor → profiles**.
+
+## 6. Enviar los correos con Gmail
+
+Supabase puede enviar los correos de recuperación desde tu cuenta de Gmail. Gmail permite hasta 500 correos al día, más que suficiente para el restaurante.
+
+### 6.1 Crear una contraseña de aplicación en Google
+
+Google no deja usar tu contraseña normal; hay que crear una especial solo para Supabase.
+
+1. Entra a <https://myaccount.google.com/security> con el Gmail que enviará los correos.
+2. Activa la **Verificación en 2 pasos** si no la tienes (Google lo exige).
+3. Entra a <https://myaccount.google.com/apppasswords>.
+4. En el nombre escribe `Supabase` y pulsa **Crear**.
+5. Google muestra una clave de 16 letras (por ejemplo `abcd efgh ijkl mnop`). Cópiala sin los espacios. No la compartas con nadie ni la guardes en el código.
+
+### 6.2 Configurar el SMTP en Supabase
+
+1. En Supabase ve a **Authentication → Emails → SMTP Settings**.
+2. Activa **Enable custom SMTP** y llena:
+   - **Sender email:** tu Gmail (el mismo del paso 6.1)
+   - **Sender name:** `Santandereano SAS`
+   - **Host:** `smtp.gmail.com`
+   - **Port number:** `465`
+   - **Username:** tu Gmail
+   - **Password:** la clave de 16 letras, sin espacios
+3. Pulsa **Save changes**.
+
+### 6.3 Poner el correo en español
+
+1. Ve a **Authentication → Emails → Templates** y elige **Reset Password**.
+2. En **Subject** escribe: `Recupera tu contraseña - Santandereano SAS`
+3. En el cuerpo (**Message body**) borra lo que hay y pega todo el contenido de `supabase/templates/recuperar-contrasena.html`. Es un correo con el nombre y los colores del restaurante, un botón para crear la contraseña nueva y el enlace de respaldo.
+4. Pulsa **Save changes**.
+
+### 6.4 Probar
+
+1. Abre la app, pulsa **¿Olvidaste tu contraseña?** y escribe el correo de un usuario del equipo.
+2. Revisa su bandeja de entrada (y la carpeta de spam). Debe llegar el correo en español.
+3. Al pulsar **Crear una contraseña nueva**, la app abre el formulario para cambiarla.
+
+Si el correo no llega, revisa en Supabase **Logs → Auth** el error que aparece. Si el enlace del correo abre una página equivocada, revisa la sección **3. Configurar las direcciones de la app**.
 
 ## Notas
 
