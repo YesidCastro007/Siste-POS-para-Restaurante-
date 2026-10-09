@@ -52,8 +52,8 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
-      <Card className="w-full max-w-2xl max-h-[95vh] overflow-hidden bg-gradient-to-br from-slate-900/98 via-red-900/98 to-slate-900/98 backdrop-blur-xl border border-red-500/40 shadow-2xl">
-        <CardHeader className="border-b border-red-500/30 bg-gradient-to-r from-red-600/20 to-red-800/20">
+      <Card className="bg-transparent w-full max-w-2xl max-h-[95vh] overflow-hidden bg-gradient-to-br from-slate-900/98 via-[#0B1630]/98 to-slate-950/98 backdrop-blur-xl border border-cyan-400/25 shadow-2xl">
+        <CardHeader className="border-b border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 to-blue-700/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-full flex items-center justify-center shadow-lg">
@@ -61,7 +61,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
               </div>
               <div>
                 <CardTitle className="text-white text-xl">Procesar Cobro</CardTitle>
-                <p className="text-red-300 text-sm">Mesa {mesaSeleccionada} • {zonaNombre}</p>
+                <p className="text-cyan-300 text-sm">Mesa {mesaSeleccionada} • {zonaNombre}</p>
               </div>
             </div>
             <Button onClick={onCerrar} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
@@ -72,7 +72,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
         
         <CardContent className="p-6 overflow-y-auto max-h-[calc(95vh-100px)]">
           <div className="space-y-6">
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-4 border border-red-500/20">
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-4 border border-cyan-400/15">
               <h3 className="text-white font-semibold mb-3 flex items-center">
                 <Receipt className="w-5 h-5 mr-2 text-red-400" />Resumen del Pedido
               </h3>
@@ -88,7 +88,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
                   </div>
                 ))}
               </div>
-              <Separator className="my-3 bg-red-500/20" />
+              <Separator className="my-3 bg-cyan-400/15" />
               <div className="flex justify-between items-center">
                 <span className="text-white font-semibold">Subtotal:</span>
                 <span className="text-xl font-bold text-white">${total.toLocaleString()}</span>
@@ -96,14 +96,14 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-red-300 mb-3">Método de Pago</label>
+              <label className="block text-sm font-medium text-cyan-300 mb-3">Método de Pago</label>
               <div className="grid grid-cols-3 gap-3">
                 {metodosPago.map((metodo) => {
                   const IconoMetodo = metodo.icono;
                   return (
                     <Button key={metodo.id} onClick={() => { setMetodoPago(metodo.id); setTipoTransferencia(''); }}
                       className={`h-24 flex flex-col items-center justify-center space-y-2 transition-all duration-300 transform hover:scale-105 ${
-                        metodoPago === metodo.id ? `bg-gradient-to-br ${metodo.color} text-white shadow-lg` : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
+                        metodoPago === metodo.id ? `bg-gradient-to-br ${metodo.color} text-white shadow-lg` : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/15'
                       }`}>
                       <IconoMetodo className="w-8 h-8" />
                       <span className="text-sm font-medium">{metodo.nombre}</span>
@@ -115,17 +115,17 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
 
             {metodoPago === 'transferencia' && (
               <div>
-                <label className="block text-sm font-medium text-red-300 mb-3">Tipo de Transferencia</label>
+                <label className="block text-sm font-medium text-cyan-300 mb-3">Tipo de Transferencia</label>
                 <div className="grid grid-cols-2 gap-3">
                   <Button onClick={() => setTipoTransferencia('Nequi')}
                     className={`h-16 text-lg font-semibold transition-all duration-300 ${
-                      tipoTransferencia === 'Nequi' ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
+                      tipoTransferencia === 'Nequi' ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/15'
                     }`}>
                     💜 Nequi
                   </Button>
                   <Button onClick={() => setTipoTransferencia('Daviplata')}
                     className={`h-16 text-lg font-semibold transition-all duration-300 ${
-                      tipoTransferencia === 'Daviplata' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
+                      tipoTransferencia === 'Daviplata' ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/15'
                     }`}>
                     ❤️ Daviplata
                   </Button>
@@ -142,10 +142,10 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
 
             {metodoPago === 'efectivo' && (
               <div>
-                <label className="block text-sm font-medium text-red-300 mb-2">Monto Recibido</label>
+                <label className="block text-sm font-medium text-cyan-300 mb-2">Monto Recibido</label>
                 <Input type="text" value={montoPagado ? parseInt(montoPagado.replace(/[^0-9]/g, '')).toLocaleString() : ''}
                   onChange={(e) => setMontoPagado(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ingrese el monto recibido" className="bg-white/5 border-red-500/30 text-white text-xl h-14 font-semibold" />
+                  placeholder="Ingrese el monto recibido" className="bg-white/5 border-cyan-400/20 text-white text-xl h-14 font-semibold" />
                 {montoPagado && cambio >= 0 && (
                   <div className="mt-3 p-4 bg-blue-500/20 rounded-lg border border-blue-500/40">
                     <div className="flex justify-between items-center">
@@ -158,9 +158,9 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
             )}
 
             <div>
-              <label className="block text-sm font-medium text-red-300 mb-2">Nota Adicional (Opcional)</label>
+              <label className="block text-sm font-medium text-cyan-300 mb-2">Nota Adicional (Opcional)</label>
               <Textarea value={notaAdicional} onChange={(e) => setNotaAdicional(e.target.value)}
-                placeholder="Ej: Cliente solicitó factura, mesa compartida, etc." className="bg-white/5 border-red-500/30 text-white min-h-[80px]" />
+                placeholder="Ej: Cliente solicitó factura, mesa compartida, etc." className="bg-white/5 border-cyan-400/20 text-white min-h-[80px]" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-4">
