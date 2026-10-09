@@ -75,6 +75,29 @@ export default function MeseroDashboard({ user, onLogout }) {
 
   // Si la zona elegida ya no existe (el dueño la borró), se muestra la primera
   const zona = zonas.find(z => z.numero === zonaActual) ?? zonas[0];
+  const zonaExiste = zonas.some(z => z.numero === zonaActual);
+
+  // Si el dueño borra la zona (o quita la mesa) mientras el mesero está en ella, se cierra el pedido
+  // para que no se guarde en una mesa que ya no existe
+  React.useEffect(() => {
+    if (zonaExiste) return;
+    setZonaActual(zonas[0].numero);
+    if (mesaSeleccionada !== null) {
+      setMostrarPedido(false);
+      setMostrarCobro(false);
+      setMesaSeleccionada(null);
+      alert('Esta zona fue eliminada por el dueño. Elija una mesa de otra zona.');
+    }
+  }, [zonaExiste, zonas, mesaSeleccionada]);
+
+  React.useEffect(() => {
+    if (zonaExiste && mesaSeleccionada !== null && mesaSeleccionada > zona.mesas) {
+      setMostrarPedido(false);
+      setMostrarCobro(false);
+      setMesaSeleccionada(null);
+      alert('Esta mesa ya no existe en la zona. Elija otra mesa.');
+    }
+  }, [zonaExiste, zona.mesas, mesaSeleccionada]);
 
   const abrirMesa = (numeroMesa) => {
     setMesaSeleccionada(numeroMesa);

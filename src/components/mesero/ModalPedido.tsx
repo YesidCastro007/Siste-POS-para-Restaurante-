@@ -46,7 +46,8 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
   const mesaKey = `${zona.numero}-${mesaSeleccionada}`;
   const mesaData = mesas[mesaKey] || { pedidos: [], total: 0, mesero: user.name };
   const [pedidos, setPedidos] = useState<ItemPedido[]>(mesaData.pedidos || []);
-  const categorias = menu.filter(c => c.productos.length > 0);
+  // Se muestran todas las categorías, también las nuevas que aún no tienen productos
+  const categorias = menu;
   const [categoriaId, setCategoriaId] = useState<number | null>(categorias[0]?.id ?? null);
   const categoriaActual = categorias.find(c => c.id === categoriaId) ?? categorias[0];
 
@@ -185,7 +186,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                 <div className="text-center py-12">
                   <UtensilsCrossed className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                   <p className="text-gray-300">El menú está vacío.</p>
-                  <p className="text-gray-400 text-sm">El dueño o la cajera pueden agregar productos desde su panel, en la sección Menú.</p>
+                  <p className="text-gray-400 text-sm">El dueño o la cajera pueden agregar categorías y productos desde su panel, en Menú y mesas.</p>
                 </div>
               ) : (
               <>
@@ -213,6 +214,11 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
                     <span className="text-xl sm:text-2xl mr-2">{categoriaActual.icono}</span> {categoriaActual.nombre}
                   </h3>
+                  {categoriaActual.productos.length === 0 && (
+                    <p className="text-gray-400 text-sm py-6 text-center">
+                      Esta categoría todavía no tiene productos. El dueño o la cajera pueden agregarlos en Menú y mesas.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     {categoriaActual.productos.map((producto) => (
                       <Button

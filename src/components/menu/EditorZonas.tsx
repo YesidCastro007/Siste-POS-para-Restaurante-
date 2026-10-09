@@ -47,11 +47,12 @@ export default function EditorZonas() {
     setZonas([...zonas, { numero, nombre: `Zona ${numero}`, mesas: 10 }]);
   };
 
-  const guardar = async () => {
-    const limpias = zonas.map(z => ({ ...z, nombre: z.nombre.trim() || `Zona ${z.numero}` }));
+  // Guarda la lista de zonas. Devuelve true si se guardó.
+  const guardar = async (lista: Zona[] = zonas): Promise<boolean> => {
+    const limpias = lista.map(z => ({ ...z, nombre: z.nombre.trim() || `Zona ${z.numero}` }));
     if (limpias.length === 0) {
       alert('Debe haber al menos una zona');
-      return;
+      return false;
     }
     // No se puede quitar una mesa que tiene un pedido abierto
     const perdidas = ocupadas.filter(key => {
@@ -66,18 +67,34 @@ export default function EditorZonas() {
         return `Mesa ${mesa} de ${zona?.nombre ?? `zona ${numero}`}`;
       });
       alert(`No se puede guardar: estas mesas tienen pedidos abiertos.\n${nombres.join('\n')}\nCóbrelas o libérelas primero.`);
-      return;
+      return false;
     }
     setGuardando(true);
     try {
       await guardarZonas(limpias);
       setGuardadas(limpias);
       setZonas(limpias);
+      return true;
     } catch (e) {
       alert(`⚠️ No se pudo guardar: ${e instanceof Error ? e.message : e}`);
+      return false;
     } finally {
       setGuardando(false);
     }
+  };
+
+  // Borrar una zona se guarda de una vez, para que los meseros dejen de verla enseguida.
+  // Los demás cambios sin guardar (nombres, número de mesas) se conservan en pantalla.
+  const eliminar = async (zona: Zona) => {
+    const yaGuardada = guardadas.some(z => z.numero === zona.numero);
+    if (!yaGuardada) {
+      setZonas(zonas.filter(z => z.numero !== zona.numero));
+      return;
+    }
+    if (!confirm(`¿Eliminar "${zona.nombre}"? Los meseros dejarán de verla.`)) return;
+    const pendientes = zonas.filter(z => z.numero !== zona.numero);
+    const ok = await guardar(guardadas.filter(z => z.numero !== zona.numero));
+    if (ok) setZonas(pendientes);
   };
 
   return (
@@ -106,7 +123,8 @@ export default function EditorZonas() {
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">mesas</span>
             </div>
             <Button
-              onClick={() => setZonas(zonas.filter(x => x.numero !== z.numero))}
+              onClick={() => eliminar(z)}
+              disabled={guardando}
               variant="outline"
               size="sm"
               aria-label={`Eliminar ${z.nombre}`}
@@ -121,11 +139,12 @@ export default function EditorZonas() {
             <Plus className="w-4 h-4 mr-1" /> Agregar zona
           </Button>
           {modificado && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-amber-300 text-xs">Cambios sin guardar</span>
               <Button onClick={() => setZonas(guardadas)} variant="outline" size="sm" className="bg-transparent border-white/20 text-gray-300 hover:bg-white/10">
                 Deshacer
               </Button>
-              <Button onClick={guardar} disabled={guardando} size="sm" className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold">
+              <Button onClick={() => guardar()} disabled={guardando} size="sm" className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold">
                 <Save className="w-4 h-4 mr-1" /> {guardando ? 'Guardando…' : 'Guardar mesas'}
               </Button>
             </div>
