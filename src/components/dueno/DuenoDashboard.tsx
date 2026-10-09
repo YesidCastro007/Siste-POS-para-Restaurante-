@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { LogOut, Crown, TrendingUp, Receipt, Calculator, UtensilsCrossed, Users, BarChart3, BookOpen } from 'lucide-react';
+import { LogOut, TrendingUp, Receipt, Calculator, UtensilsCrossed, Users, BarChart3, BookOpen } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, cargarVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
 import EditorMenu from '@/components/menu/EditorMenu';
 import EditorZonas from '@/components/menu/EditorZonas';
+import EditorNegocio from '@/components/menu/EditorNegocio';
+import { MarcaEncabezado } from '@/components/marca/Marca';
+import { useNombreNegocio } from '@/hooks/useNombreNegocio';
 import { actualizarUsuario, cargarUsuarios, type Rol, type Usuario } from '@/lib/auth';
 import {
   PERIODOS, inicioDelPeriodo, type Periodo, type Fila, filtrarPorPeriodo, resumen, porMesero, porMetodo,
@@ -68,7 +71,7 @@ function Ranking({ titulo, filas, contar, vacio }: { titulo: string; filas: Fila
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 rounded-full bg-white/10">
-                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${(fila.total / maximo) * 100}%` }} />
+                    <div className="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: `${(fila.total / maximo) * 100}%` }} />
                   </div>
                   <span className="text-gray-400 text-xs w-16 text-right">{contar(fila.cantidad)}</span>
                 </div>
@@ -115,7 +118,7 @@ function FilaUsuario({ usuario, editable, alCambiar }: { usuario: Usuario; edita
                   key={rol}
                   disabled={guardando || usuario.role === rol}
                   onClick={() => guardar(rol, usuario.active)}
-                  className={`px-3 py-1 text-xs rounded ${usuario.role === rol ? 'bg-amber-500 text-slate-900 font-semibold' : 'text-gray-200 hover:bg-white/10'}`}
+                  className={`px-3 py-1 text-xs rounded ${usuario.role === rol ? 'bg-cyan-400 text-slate-900 font-semibold' : 'text-gray-200 hover:bg-white/10'}`}
                 >
                   {NOMBRE_ROL[rol]}
                 </button>
@@ -125,7 +128,7 @@ function FilaUsuario({ usuario, editable, alCambiar }: { usuario: Usuario; edita
               size="sm"
               disabled={guardando}
               onClick={() => guardar(usuario.role, !usuario.active)}
-              className={usuario.active ? 'h-7 text-xs bg-transparent border border-red-500 text-red-300 hover:bg-red-600 hover:text-white' : 'h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white'}
+              className={usuario.active ? 'h-7 text-xs bg-transparent border border-red-500/70 text-red-300 hover:bg-red-600 hover:text-white' : 'h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white'}
             >
               {usuario.active ? 'Desactivar' : 'Activar'}
             </Button>
@@ -137,7 +140,7 @@ function FilaUsuario({ usuario, editable, alCambiar }: { usuario: Usuario; edita
           </div>
         )}
       </div>
-      {error && <p className="text-red-300 text-xs mt-2">{error}</p>}
+      {error && <p className="text-cyan-300 text-xs mt-2">{error}</p>}
     </div>
   );
 }
@@ -155,6 +158,7 @@ function TooltipDia({ active, payload }: { active?: boolean; payload?: { payload
 }
 
 export default function DueñoDashboard({ user, onLogout }) {
+  const negocio = useNombreNegocio();
   const [periodo, setPeriodo] = useState<Periodo>('hoy');
   const [seccion, setSeccion] = useState<'resumen' | 'menu' | 'usuarios'>('resumen');
   const [ventas, setVentas] = useState<Venta[]>([]);
@@ -205,24 +209,16 @@ export default function DueñoDashboard({ user, onLogout }) {
   const nombrePeriodo = PERIODOS.find(p => p.id === periodo)?.nombre.toLowerCase();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
-      <div className="bg-slate-900/95 backdrop-blur-md border-b border-red-900/40 shadow-lg sticky top-0 z-40">
+    <div className="min-h-screen fondo-shadow">
+      <div className="bg-[#070D1C]/85 backdrop-blur-md border-b border-cyan-400/10 sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <MarcaEncabezado panel="Panel del Dueño" negocio={negocio} />
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center">
-              <Crown className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold text-white">Santandereano SAS</h1>
-              <p className="text-amber-400 text-xs sm:text-sm">Panel del Dueño</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className="text-right">
+            <div className="text-right hidden sm:block">
               <p className="text-white text-sm font-medium">{user.name}</p>
               <p className="text-gray-400 text-xs">Dueño</p>
             </div>
-            <Button onClick={onLogout} variant="outline" size="sm" className="border-red-600 text-red-400 bg-transparent hover:bg-red-600 hover:text-white">
+            <Button onClick={onLogout} variant="outline" size="sm" className="border-slate-600 text-slate-300 bg-transparent hover:bg-slate-800 hover:text-white">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
@@ -242,7 +238,7 @@ export default function DueñoDashboard({ user, onLogout }) {
               key={s.id}
               onClick={() => setSeccion(s.id)}
               className={`h-14 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${
-                seccion === s.id ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold' : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10'
+                seccion === s.id ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold' : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10'
               }`}
             >
               <s.Icono className="w-5 h-5" />
@@ -253,6 +249,7 @@ export default function DueñoDashboard({ user, onLogout }) {
 
         {seccion === 'menu' && (
           <>
+            <EditorNegocio />
             <EditorMenu />
             <EditorZonas />
           </>
@@ -265,7 +262,7 @@ export default function DueñoDashboard({ user, onLogout }) {
             <Button
               key={p.id}
               onClick={() => setPeriodo(p.id)}
-              className={periodo === p.id ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold' : 'bg-white/10 hover:bg-white/20 text-gray-200'}
+              className={periodo === p.id ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold' : 'bg-white/10 hover:bg-white/20 text-gray-200'}
             >
               {p.nombre}
             </Button>
@@ -293,7 +290,7 @@ export default function DueñoDashboard({ user, onLogout }) {
                   <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} width={56}
                     tickFormatter={v => (v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${v}`)} />
                   <Tooltip content={<TooltipDia />} cursor={{ fill: 'rgba(255,255,255,0.06)' }} />
-                  <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+                  <Bar dataKey="total" fill="#00C2FF" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

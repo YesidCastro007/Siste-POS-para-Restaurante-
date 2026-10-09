@@ -10,14 +10,14 @@ import { type ItemPedido, nombreItem, detalleItem, subtotal, totalPedidos } from
 
 // Colores de las categorías, en orden
 const COLORES = [
-  'from-red-500 to-red-600',
+  'from-cyan-500 to-blue-600',
   'from-yellow-500 to-orange-500',
   'from-green-500 to-green-600',
   'from-blue-500 to-blue-600',
   'from-purple-500 to-purple-600',
   'from-pink-500 to-pink-600',
   'from-teal-500 to-teal-600',
-  'from-amber-500 to-amber-600'
+  'from-cyan-500 to-blue-600'
 ];
 
 type Elegidas = Record<string, string | string[]>;
@@ -153,17 +153,17 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
       <div className="min-h-screen flex items-start sm:items-center justify-center p-0 sm:p-4">
-        <Card className="w-full sm:max-w-7xl min-h-screen sm:min-h-0 sm:max-h-[95vh] bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border-0 sm:border border-red-500/30 shadow-2xl sm:rounded-lg rounded-none">
+        <Card className="bg-transparent w-full sm:max-w-7xl min-h-screen sm:min-h-0 sm:max-h-[95vh] bg-gradient-to-br from-slate-900/95 via-[#0B1630]/95 to-slate-950/95 backdrop-blur-xl border-0 sm:border border-cyan-400/20 shadow-2xl sm:rounded-lg rounded-none">
         {/* Header */}
-        <CardHeader className="border-b border-red-500/30 bg-gradient-to-r from-red-600/20 to-red-800/20 p-3 sm:p-6">
+        <CardHeader className="border-b border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 to-blue-700/10 p-3 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-cyan-500 to-blue-700 rounded-full flex items-center justify-center">
                 <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
                 <CardTitle className="text-white text-base sm:text-xl">Mesa {mesaSeleccionada}</CardTitle>
-                <p className="text-red-300 text-xs sm:text-sm">{zona.nombre} • {user.name}</p>
+                <p className="text-cyan-300 text-xs sm:text-sm">{zona.nombre} • {user.name}</p>
               </div>
             </div>
             <Button
@@ -180,7 +180,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
         <CardContent className="p-0">
           <div className="flex flex-col lg:grid lg:grid-cols-3 min-h-[calc(100vh-60px)] sm:min-h-0 sm:h-[calc(95vh-120px)]">
             {/* Panel de Categorías */}
-            <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto flex-1 lg:border-r border-red-500/20">
+            <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto flex-1 lg:border-r border-cyan-400/15">
               {categorias.length === 0 ? (
                 <div className="text-center py-12">
                   <UtensilsCrossed className="w-12 h-12 text-gray-500 mx-auto mb-3" />
@@ -198,7 +198,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                     className={`h-14 sm:h-20 flex flex-col items-center justify-center space-y-0.5 sm:space-y-1 transition-all duration-300 transform hover:scale-105 ${
                       categoriaActual?.id === categoria.id
                         ? `bg-gradient-to-br ${COLORES[indiceColor(categoria)]} text-white shadow-lg`
-                        : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/15'
                     }`}
                   >
                     <span className="text-xl sm:text-2xl">{categoria.icono}</span>
@@ -219,7 +219,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                         key={producto.id}
                         disabled={!producto.disponible}
                         onClick={() => elegirProducto(producto, categoriaActual)}
-                        className={`h-12 sm:h-14 flex justify-between items-center p-3 sm:p-4 text-left bg-white/5 border border-red-500/30 text-gray-300 hover:bg-white/15 hover:text-white transition-all duration-200 text-xs sm:text-sm disabled:opacity-40`}
+                        className={`h-12 sm:h-14 flex justify-between items-center p-3 sm:p-4 text-left bg-white/5 border border-cyan-400/20 text-gray-300 hover:bg-white/15 hover:text-white transition-all duration-200 text-xs sm:text-sm disabled:opacity-40`}
                       >
                         <span className="font-medium truncate">{producto.nombre}</span>
                         <span className="text-green-400 font-bold ml-2 shrink-0">
@@ -250,7 +250,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
 
                   {configurando.opciones.map((opcion) => (
                     <div key={opcion.nombre}>
-                      <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">
+                      <label className="block text-xs sm:text-sm font-medium text-cyan-300 mb-2 sm:mb-3">
                         {opcion.nombre}{opcion.varias ? ' (puede elegir varias)' : ''}
                       </label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -264,7 +264,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                               className={`h-10 sm:h-12 text-xs sm:text-sm ${
                                 activo
                                   ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
-                                  : 'bg-white/5 border border-red-500/30 text-gray-300 hover:bg-white/10'
+                                  : 'bg-white/5 border border-cyan-400/20 text-gray-300 hover:bg-white/10'
                               }`}
                             >
                               {valor}
@@ -278,14 +278,14 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {configurando.precio_libre ? (
                       <div>
-                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2">Precio</label>
+                        <label className="block text-xs sm:text-sm font-medium text-cyan-300 mb-2">Precio</label>
                         <Input
                           type="text"
                           inputMode="numeric"
                           value={precioLibre ? parseInt(precioLibre).toLocaleString() : ''}
                           onChange={(e) => setPrecioLibre(e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="Ej: 25.000"
-                          className="bg-white/5 border-red-500/30 text-white h-10 sm:h-12 text-sm"
+                          className="bg-white/5 border-cyan-400/20 text-white h-10 sm:h-12 text-sm"
                         />
                       </div>
                     ) : (
@@ -296,7 +296,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                     <div className="flex items-end">
                       <Button
                         onClick={agregarConfigurado}
-                        className="w-full h-10 sm:h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium text-sm"
+                        className="w-full h-10 sm:h-12 boton-marca text-white font-medium text-sm"
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Agregar
@@ -310,7 +310,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
             </div>
 
             {/* Panel de Pedido */}
-            <div className="p-3 sm:p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50 flex-shrink-0 border-t lg:border-t-0 border-red-500/20">
+            <div className="p-3 sm:p-6 bg-gradient-to-b from-slate-800/50 to-slate-900/50 flex-shrink-0 border-t lg:border-t-0 border-cyan-400/15">
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base sm:text-lg font-semibold text-white">Pedido Actual</h3>
@@ -327,7 +327,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                     </div>
                   ) : (
                     pedidos.map((pedido) => (
-                      <div key={pedido.id} className="bg-white/5 rounded-lg p-2 sm:p-3 border border-red-500/20">
+                      <div key={pedido.id} className="bg-white/5 rounded-lg p-2 sm:p-3 border border-cyan-400/15">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-white font-medium text-sm">{nombreItem(pedido)}</p>
@@ -380,7 +380,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   )}
                 </div>
 
-                <Separator className="bg-red-500/20" />
+                <Separator className="bg-cyan-400/15" />
 
                 <div className="space-y-3 sm:space-y-4">
                   <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">

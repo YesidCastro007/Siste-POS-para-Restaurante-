@@ -9,6 +9,7 @@ export interface ReporteCierre {
   cantidadOrdenes: number;
   ventasPorMetodo: Record<string, number>;
   cajero: string;
+  negocio?: string;
   categorias: Record<string, {
     cantidad: number;
     ingresos: number;
@@ -28,7 +29,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   // Encabezado
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('SANTANDEREANO SAS', pageWidth / 2, 20, { align: 'center' });
+  doc.text((reporte.negocio || 'SHADOW').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
   
   doc.setFontSize(16);
   doc.text('Reporte de Cierre de Caja', pageWidth / 2, 30, { align: 'center' });
@@ -159,7 +160,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     doc.setFontSize(8);
     doc.setTextColor(128, 128, 128);
     doc.text(
-      `Página ${i} de ${totalPages} - Generado el ${new Date().toLocaleString()}`,
+      `Página ${i} de ${totalPages} - Generado con SHADOW el ${new Date().toLocaleString()}`,
       pageWidth / 2,
       doc.internal.pageSize.getHeight() - 10,
       { align: 'center' }
@@ -169,13 +170,13 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   return doc;
 };
 
-export const enviarReportePorWhatsApp = (doc: jsPDF, numeroTelefono: string) => {
+export const enviarReportePorWhatsApp = (doc: jsPDF, numeroTelefono: string, negocio = '') => {
   // Convertir PDF a blob
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   
   // Crear mensaje para WhatsApp
-  const mensaje = `Reporte de Cierre de Caja - Santandereano SAS\nFecha: ${new Date().toLocaleDateString()}`;
+  const mensaje = `Reporte de Cierre de Caja${negocio ? ` - ${negocio}` : ''}\nFecha: ${new Date().toLocaleDateString()}`;
   
   // Limpiar número de teléfono (remover espacios, guiones, etc.)
   const numeroLimpio = numeroTelefono.replace(/\D/g, '');

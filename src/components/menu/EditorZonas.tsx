@@ -125,7 +125,7 @@ export default function EditorZonas() {
               <Button onClick={() => setZonas(guardadas)} variant="outline" size="sm" className="bg-transparent border-white/20 text-gray-300 hover:bg-white/10">
                 Deshacer
               </Button>
-              <Button onClick={guardar} disabled={guardando} size="sm" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
+              <Button onClick={guardar} disabled={guardando} size="sm" className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold">
                 <Save className="w-4 h-4 mr-1" /> {guardando ? 'Guardando…' : 'Guardar mesas'}
               </Button>
             </div>

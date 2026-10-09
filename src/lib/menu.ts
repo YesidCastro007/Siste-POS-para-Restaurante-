@@ -119,3 +119,10 @@ export const cargarZonas = async (): Promise<Zona[]> => {
 };
 
 export const guardarZonas = (zonas: Zona[]) => guardarConfig('zonas', zonas);
+
+// ---------- Datos del negocio ----------
+
+// Nombre del restaurante que aparece en los encabezados y en los reportes
+export const cargarNombreNegocio = () => leerConfig<string>('negocio_nombre', '');
+
+export const guardarNombreNegocio = (nombre: string) => guardarConfig('negocio_nombre', nombre.trim());

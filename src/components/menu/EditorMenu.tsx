@@ -216,7 +216,7 @@ function FilaProducto({ producto, onCambio }: { producto: Producto; onCambio: ()
             onClick={() => guardar()}
             disabled={guardando}
             size="sm"
-            className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
+            className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
           >
             <Save className="w-4 h-4 mr-1" /> {guardando ? 'Guardando…' : 'Guardar cambios'}
           </Button>
@@ -331,7 +331,7 @@ export default function EditorMenu() {
         <p className="text-gray-400 text-sm">Los cambios se ven al instante en los celulares de los meseros.</p>
       </CardHeader>
       <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4">
-        {error && <p className="text-red-300 text-sm">{error}</p>}
+        {error && <p className="text-cyan-300 text-sm">{error}</p>}
 
         {/* Categorías */}
         <div className="flex flex-wrap gap-2">
@@ -340,7 +340,7 @@ export default function EditorMenu() {
               key={c.id}
               onClick={() => setCategoriaId(c.id)}
               size="sm"
-              className={categoria?.id === c.id ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold' : 'bg-white/10 hover:bg-white/20 text-gray-200'}
+              className={categoria?.id === c.id ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold' : 'bg-white/10 hover:bg-white/20 text-gray-200'}
             >
               <span className="mr-1">{c.icono}</span>{c.nombre}
               <span className="ml-1 opacity-70">({c.productos.length})</span>
@@ -378,7 +378,7 @@ export default function EditorMenu() {
               />
               <div className="flex gap-2 col-span-2 sm:col-span-1">
                 {categoriaModificada && (
-                  <Button onClick={guardarCategoria} size="sm" className="h-10 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
+                  <Button onClick={guardarCategoria} size="sm" className="h-10 bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold">
                     <Save className="w-4 h-4 mr-1" /> Guardar
                   </Button>
                 )}

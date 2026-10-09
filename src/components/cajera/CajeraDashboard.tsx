@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LogOut, UtensilsCrossed, X, Plus, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, FileText, MessageCircle, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MarcaEncabezado } from '@/components/marca/Marca';
+import { useNombreNegocio } from '@/hooks/useNombreNegocio';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -11,6 +13,21 @@ import { type ItemPedido, nombreItem, detalleItem, subtotal, precioUnitario, cat
 import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
 import CajeroMesasView from '@/components/CajeroMesasView';
 import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
+
+// Tarjeta con una cifra del turno o del periodo
+function Estadistica({ titulo, valor, Icono, destacado = false }) {
+  return (
+    <Card className={`backdrop-blur-md ${destacado ? 'bg-transparent bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border-cyan-400/40' : 'bg-white/5 border-white/10'}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-slate-300 text-xs sm:text-sm font-medium">{titulo}</p>
+          <Icono className="w-4 h-4 text-cyan-300 shrink-0" />
+        </div>
+        <p className="text-white text-xl sm:text-2xl font-bold mt-2 truncate">{valor}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Suma las categorías del cierre en bebidas (las que tienen "bebida" en el nombre) y alimentos (el resto)
 const bebidasYAlimentos = (categorias: Record<string, { cantidad: number; ingresos: number }>) => {
@@ -34,6 +51,7 @@ const inicioDelFiltro = (filtro: string): Date | null => {
 };
 
 export default function CajeraDashboard({ user, onLogout }) {
+  const negocio = useNombreNegocio();
   const [ventasHoy, setVentasHoy] = useState([]);
   const [filtroFecha, setFiltroFecha] = useState('hoy');
   const [busquedaMesa, setBusquedaMesa] = useState('');
@@ -137,7 +155,7 @@ export default function CajeraDashboard({ user, onLogout }) {
     
     // Si hay número de WhatsApp configurado, enviar
     if (numeroConfigurado) {
-      enviarReportePorWhatsApp(pdf, numeroConfigurado);
+      enviarReportePorWhatsApp(pdf, numeroConfigurado, negocio);
     } else {
       // Solo descargar el PDF
       pdf.save(`Reporte_Cierre_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -217,6 +235,7 @@ export default function CajeraDashboard({ user, onLogout }) {
       cantidadOrdenes: ventas.length,
       ventasPorMetodo: porMetodo,
       cajero: user.name,
+      negocio,
       categorias: categorias
     };
   };
@@ -239,27 +258,15 @@ export default function CajeraDashboard({ user, onLogout }) {
   }, {});
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen fondo-shadow">
       {/* Header */}
-      <div className="bg-slate-900/95 backdrop-blur-md border-b border-red-900/40 shadow-lg sticky top-0 z-40">
+      <div className="bg-[#070D1C]/85 backdrop-blur-md border-b border-cyan-400/10 sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-800 rounded-full flex items-center justify-center">
-                <Calculator className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">
-                  Santandereano SAS
-                </h1>
-                <p className="text-sm text-green-300">
-                  Panel de Caja
-                </p>
-              </div>
-            </div>
+            <MarcaEncabezado panel="Panel de Caja" negocio={negocio} />
 
             <div className="flex items-center space-x-4">
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white">{user.name}</p>
                 <p className="text-xs text-gray-400">Caja</p>
               </div>
@@ -267,7 +274,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                 onClick={onLogout}
                 variant="outline"
                 size="sm"
-                className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                className="border-slate-600 text-slate-300 bg-transparent hover:bg-slate-800 hover:text-white"
               >
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -278,15 +285,15 @@ export default function CajeraDashboard({ user, onLogout }) {
 
       <div className="container mx-auto px-4 py-6 space-y-6">
         {/* Selector de Vista */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardContent className="p-4">
             <div className="grid grid-cols-3 gap-3">
               <Button
                 onClick={() => setVistaActual('ventas')}
                 className={`h-16 flex flex-col items-center justify-center transition-all ${
                   vistaActual === 'ventas'
-                    ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
                 }`}
               >
                 <Receipt className="w-6 h-6 mb-1" />
@@ -296,8 +303,8 @@ export default function CajeraDashboard({ user, onLogout }) {
                 onClick={() => setVistaActual('mesas')}
                 className={`h-16 flex flex-col items-center justify-center transition-all ${
                   vistaActual === 'mesas'
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
                 }`}
               >
                 <UtensilsCrossed className="w-6 h-6 mb-1" />
@@ -307,8 +314,8 @@ export default function CajeraDashboard({ user, onLogout }) {
                 onClick={() => setVistaActual('menu')}
                 className={`h-16 flex flex-col items-center justify-center transition-all ${
                   vistaActual === 'menu'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
                 }`}
               >
                 <BookOpen className="w-6 h-6 mb-1" />
@@ -328,16 +335,16 @@ export default function CajeraDashboard({ user, onLogout }) {
         ) : (
           <>
         {/* Botones de Apertura/Cierre de Caja */}
-        <Card className={`border-2 shadow-xl ${
+        <Card className={`border shadow-xl backdrop-blur-md ${
           cajaAbierta 
-            ? 'bg-green-50 border-green-500' 
-            : 'bg-red-50 border-red-500'
+            ? 'bg-emerald-500/10 border-emerald-400/40' 
+            : 'bg-slate-900/60 border-amber-400/30'
         }`}>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  cajaAbierta ? 'bg-green-500' : 'bg-red-500'
+                <div className={`w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-full flex items-center justify-center ${
+                  cajaAbierta ? 'bg-emerald-500/20 ring-1 ring-emerald-400/50' : 'bg-amber-400/10 ring-1 ring-amber-400/40'
                 }`}>
                   {cajaAbierta ? (
                     <span className="text-3xl">🔓</span>
@@ -346,17 +353,17 @@ export default function CajeraDashboard({ user, onLogout }) {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">
+                  <h3 className="font-marca text-xl font-bold text-white">
                     {cajaAbierta ? 'Caja Abierta' : 'Caja Cerrada'}
                   </h3>
                   {cajaAbierta ? (
-                    <div className="text-sm text-gray-700 space-y-1">
+                    <div className="text-sm text-slate-300 space-y-1">
                       <p>📅 Apertura: {new Date(fechaApertura).toLocaleString()}</p>
                       <p>💰 Ventas del turno: {filtrarVentasDelDia().length} órdenes</p>
                       <p>💵 Total acumulado: ${filtrarVentasDelDia().reduce((sum, v) => sum + v.total, 0).toLocaleString()}</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">Debe abrir la caja para comenzar a registrar ventas</p>
+                    <p className="text-sm text-slate-400">Debe abrir la caja para comenzar a registrar ventas</p>
                   )}
                 </div>
               </div>
@@ -364,7 +371,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                 {!cajaAbierta ? (
                   <Button
                     onClick={abrirCaja}
-                    className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 text-lg font-semibold shadow-lg"
+                    className="boton-marca w-full sm:w-auto h-12 px-8 text-base font-semibold"
                   >
                     🔓 Abrir Caja
                   </Button>
@@ -372,7 +379,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                   <Button
                     onClick={cerrarCaja}
                     disabled={filtrarVentasDelDia().length === 0}
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 text-lg font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto h-12 bg-transparent border border-red-400/60 text-red-200 hover:bg-red-500/20 px-8 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     🔒 Cerrar Caja y Ver Reporte
                   </Button>
@@ -384,101 +391,24 @@ export default function CajeraDashboard({ user, onLogout }) {
 
         {/* Estadísticas Rápidas - Solo ventas del turno actual */}
         {cajaAbierta && (
-          <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-4 mb-4">
-            <p className="text-blue-800 font-semibold text-center">
+          <div className="bg-cyan-400/10 border border-cyan-400/30 rounded-lg p-3">
+            <p className="text-cyan-200 text-sm font-medium text-center">
               📊 Mostrando solo ventas del turno actual (desde {new Date(fechaApertura).toLocaleTimeString()})
             </p>
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <Card className="bg-white/90 border-green-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-700 text-sm font-medium">{cajaAbierta ? 'Total Turno' : 'Total Ventas'}</p>
-                  <p className="text-3xl font-bold text-gray-900">${totalVentas.toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/90 border-blue-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-700 text-sm font-medium">Órdenes</p>
-                  <p className="text-3xl font-bold text-gray-900">{ventasFiltradas.length}</p>
-                </div>
-                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
-                  <Receipt className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/90 border-purple-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-700 text-sm font-medium">Efectivo</p>
-                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo.efectivo || 0).toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
-                  <Banknote className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/90 border-orange-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-orange-700 text-sm font-medium">Tarjeta</p>
-                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo.tarjeta || 0).toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
-                  <CreditCard className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/90 border-pink-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-pink-700 text-sm font-medium">Nequi</p>
-                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo['transferencia - Nequi'] || 0).toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center">
-                  <Smartphone className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/90 border-red-500 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-700 text-sm font-medium">Daviplata</p>
-                  <p className="text-3xl font-bold text-gray-900">${(ventasPorMetodo['transferencia - Daviplata'] || 0).toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
-                  <Smartphone className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+          <Estadistica titulo={cajaAbierta ? 'Total Turno' : 'Total Ventas'} valor={`$${totalVentas.toLocaleString()}`} Icono={BarChart3} destacado />
+          <Estadistica titulo="Órdenes" valor={ventasFiltradas.length} Icono={Receipt} />
+          <Estadistica titulo="Efectivo" valor={`$${(ventasPorMetodo.efectivo || 0).toLocaleString()}`} Icono={Banknote} />
+          <Estadistica titulo="Tarjeta" valor={`$${(ventasPorMetodo.tarjeta || 0).toLocaleString()}`} Icono={CreditCard} />
+          <Estadistica titulo="Nequi" valor={`$${(ventasPorMetodo['transferencia - Nequi'] || 0).toLocaleString()}`} Icono={Smartphone} />
+          <Estadistica titulo="Daviplata" valor={`$${(ventasPorMetodo['transferencia - Daviplata'] || 0).toLocaleString()}`} Icono={Smartphone} />
         </div>
 
         {/* Configuración de WhatsApp */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-white flex items-center">
@@ -518,7 +448,7 @@ export default function CajeraDashboard({ user, onLogout }) {
         </Card>
 
         {/* Filtros y Búsqueda */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row gap-4 items-center">
               <div className="flex items-center space-x-2">
@@ -536,8 +466,8 @@ export default function CajeraDashboard({ user, onLogout }) {
                       variant={filtroFecha === periodo.id ? "default" : "outline"}
                       size="sm"
                       className={filtroFecha === periodo.id 
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' 
-                        : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
+                        ? 'bg-cyan-400 text-slate-900 font-semibold' 
+                        : 'bg-white/5 border-cyan-400/20 text-gray-300 hover:bg-white/10'
                       }
                     >
                       {periodo.label}
@@ -552,7 +482,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                   value={busquedaMesa}
                   onChange={(e) => setBusquedaMesa(e.target.value)}
                   placeholder="Buscar por mesa..."
-                  className="bg-white/5 border-red-500/30 text-white max-w-xs"
+                  className="bg-white/5 border-cyan-400/20 text-white max-w-xs"
                 />
               </div>
             </div>
@@ -560,14 +490,14 @@ export default function CajeraDashboard({ user, onLogout }) {
         </Card>
 
         {/* Lista de Ventas */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardHeader>
             <CardTitle className="text-white flex items-center justify-between">
               <div className="flex items-center">
                 <Receipt className="w-5 h-5 mr-2 text-green-400" />
                 {cajaAbierta ? 'Ventas del Turno Actual' : 'Historial de Ventas'} ({ventasFiltradas.length})
               </div>
-              <Badge className="bg-blue-500 text-white">
+              <Badge className="bg-cyan-400/20 text-cyan-200 border border-cyan-400/30">
                 🔄 Actualización automática
               </Badge>
             </CardTitle>
@@ -581,7 +511,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                 </div>
               ) : (
                 ventasFiltradas.map((venta) => (
-                  <div key={venta.id} className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 rounded-lg p-4 border border-red-500/20 hover:border-red-500/40 transition-all duration-200">
+                  <div key={venta.id} className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 rounded-lg p-4 border border-cyan-400/15 hover:border-cyan-400/40 transition-all duration-200">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-4">
@@ -631,8 +561,8 @@ export default function CajeraDashboard({ user, onLogout }) {
       {/* Modal Detalle de Venta */}
       {mostrarDetalleVenta && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30">
-            <CardHeader className="border-b border-red-500/30">
+          <Card className="bg-transparent w-full max-w-2xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-[#0B1630]/95 to-slate-950/95 backdrop-blur-xl border border-cyan-400/20">
+            <CardHeader className="border-b border-cyan-400/20">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-white">Detalle de Venta - Mesa {mostrarDetalleVenta.mesa}</CardTitle>
                 <Button
@@ -666,7 +596,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                   </div>
                 </div>
                 
-                <Separator className="bg-red-500/20" />
+                <Separator className="bg-cyan-400/15" />
                 
                 <div>
                   <h4 className="text-white font-semibold mb-3">Productos:</h4>
@@ -704,7 +634,7 @@ export default function CajeraDashboard({ user, onLogout }) {
       {/* Modal Configuración WhatsApp */}
       {mostrarConfigWhatsApp && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md bg-gradient-to-br from-slate-900/95 via-green-900/95 to-slate-900/95 backdrop-blur-xl border border-green-500/30">
+          <Card className="bg-transparent w-full max-w-md bg-gradient-to-br from-slate-900/95 via-green-900/95 to-slate-900/95 backdrop-blur-xl border border-green-500/30">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-white flex items-center">
@@ -769,7 +699,7 @@ export default function CajeraDashboard({ user, onLogout }) {
       {mostrarReporte && reporteCierre && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden bg-white shadow-2xl">
-            <CardHeader className="bg-red-600 text-white">
+            <CardHeader className="bg-gradient-to-r from-[#0F172A] to-[#13254A] text-white">
               <CardTitle className="text-center">📊 Reporte General de Ventas - Cierre de Caja</CardTitle>
             </CardHeader>
             <CardContent className="p-6 overflow-y-auto max-h-[calc(95vh-100px)]">
@@ -912,7 +842,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                   </Button>
                   <Button
                     onClick={confirmarCierreCaja}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                    className="flex-1 boton-marca"
                   >
                     <FileText className="w-4 h-4 mr-2" />
                     Confirmar y Generar PDF

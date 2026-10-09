@@ -59,20 +59,20 @@ export default function CajeroMesasView() {
 
   return (
     <>
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-500 shadow-xl">
+      <Card className="bg-transparent bg-gradient-to-br from-cyan-500/15 to-blue-600/15 border border-cyan-400/30 backdrop-blur-md">
         <CardContent className="p-4 sm:p-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="text-center">
-              <p className="text-blue-700 text-xs sm:text-sm font-medium">Mesas Activas</p>
-              <p className="text-3xl sm:text-4xl font-bold text-blue-900">{mesasActivas.length}</p>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium">Mesas Activas</p>
+              <p className="text-3xl sm:text-4xl font-bold text-white">{mesasActivas.length}</p>
             </div>
             <div className="text-center">
-              <p className="text-purple-700 text-xs sm:text-sm font-medium">Total Pendiente</p>
-              <p className="text-3xl sm:text-4xl font-bold text-purple-900">${totalMesasActivas.toLocaleString()}</p>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium">Total Pendiente</p>
+              <p className="text-3xl sm:text-4xl font-bold text-white">${totalMesasActivas.toLocaleString()}</p>
             </div>
             <div className="text-center">
-              <p className="text-green-700 text-xs sm:text-sm font-medium">Promedio por Mesa</p>
-              <p className="text-3xl sm:text-4xl font-bold text-green-900">
+              <p className="text-slate-300 text-xs sm:text-sm font-medium">Promedio por Mesa</p>
+              <p className="text-3xl sm:text-4xl font-bold text-white">
                 ${mesasActivas.length > 0 ? Math.round(totalMesasActivas / mesasActivas.length).toLocaleString() : 0}
               </p>
             </div>
@@ -80,7 +80,7 @@ export default function CajeroMesasView() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 border-gray-300 shadow-xl">
+      <Card className="bg-white/5 border-white/10 backdrop-blur-md">
         <CardContent className="p-3 sm:p-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {zonas.map((z) => {
@@ -90,13 +90,13 @@ export default function CajeroMesasView() {
                 <Button
                   key={z.numero}
                   onClick={() => setZonaElegida(z.numero)}
-                  className={`h-16 sm:h-20 flex flex-col items-center justify-center text-xs sm:text-base ${
+                  className={`h-auto min-h-16 sm:min-h-20 py-2 flex flex-col items-center justify-center gap-0.5 text-xs sm:text-base ${
                     pisoSeleccionado === z.numero
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
+                      : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
                   }`}
                 >
-                  <span className="text-base sm:text-lg font-bold truncate max-w-full">{z.nombre}</span>
+                  <span className="block text-base sm:text-lg font-bold leading-tight truncate max-w-full">{z.nombre}</span>
                   <span className="text-xs sm:text-sm">{mesasDelPiso.length} activas</span>
                   <span className="text-[10px] sm:text-xs font-semibold">${totalPiso.toLocaleString()}</span>
                 </Button>
@@ -106,9 +106,9 @@ export default function CajeroMesasView() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 border-gray-300 shadow-xl">
+      <Card className="bg-white/5 border-white/10 backdrop-blur-md">
         <CardHeader className="p-3 sm:p-6">
-          <CardTitle className="text-gray-900 text-base sm:text-xl">Mesas - {zona.nombre}</CardTitle>
+          <CardTitle className="text-white text-base sm:text-xl">Mesas - {zona.nombre}</CardTitle>
         </CardHeader>
         <CardContent className="p-3 sm:p-6">
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4">
@@ -125,11 +125,11 @@ export default function CajeroMesasView() {
                   className={`aspect-square rounded-xl p-2 sm:p-4 flex flex-col items-center justify-center border-2 ${
                     ocupada
                       ? `${colorConfig.bg} ${colorConfig.border} shadow-lg`
-                      : 'bg-green-50 border-green-300'
+                      : 'bg-emerald-500/10 border-emerald-400/40'
                   }`}
                 >
-                  <UtensilsCrossed className={`w-4 h-4 sm:w-6 sm:h-6 mb-1 sm:mb-2 ${ocupada ? colorConfig.text : 'text-green-700'}`} />
-                  <p className={`text-sm sm:text-lg font-bold ${ocupada ? colorConfig.text : 'text-green-800'}`}>{numeroMesa}</p>
+                  <UtensilsCrossed className={`w-4 h-4 sm:w-6 sm:h-6 mb-1 sm:mb-2 ${ocupada ? colorConfig.text : 'text-emerald-300'}`} />
+                  <p className={`text-sm sm:text-lg font-bold ${ocupada ? colorConfig.text : 'text-emerald-200'}`}>{numeroMesa}</p>
                   {ocupada ? (
                     <>
                       <p className={`text-[10px] sm:text-xs font-medium ${colorConfig.text} truncate w-full text-center`}>{mesaData.mesero}</p>
@@ -141,7 +141,7 @@ export default function CajeroMesasView() {
                       </p>
                     </>
                   ) : (
-                    <p className="text-[10px] sm:text-xs text-green-700">Disponible</p>
+                    <p className="text-[10px] sm:text-xs text-emerald-300">Disponible</p>
                   )}
                 </div>
               );
@@ -150,16 +150,16 @@ export default function CajeroMesasView() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 border-gray-300 shadow-xl">
+      <Card className="bg-white/5 border-white/10 backdrop-blur-md">
         <CardHeader className="p-3 sm:p-6">
-          <CardTitle className="text-gray-900 text-base sm:text-xl">Detalle de Mesas Activas</CardTitle>
+          <CardTitle className="text-white text-base sm:text-xl">Detalle de Mesas Activas</CardTitle>
         </CardHeader>
         <CardContent className="p-3 sm:p-6">
           <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto">
             {mesasActivas.filter(([key]) => key.startsWith(`${pisoSeleccionado}-`)).length === 0 ? (
               <div className="text-center py-12">
-                <UtensilsCrossed className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">No hay mesas activas en esta zona</p>
+                <UtensilsCrossed className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                <p className="text-slate-400">No hay mesas activas en esta zona</p>
               </div>
             ) : (
               mesasActivas
@@ -168,26 +168,26 @@ export default function CajeroMesasView() {
                   const numero = mesaKey.split('-')[1];
                   const colorConfig = getMeseroColorConfig(mesaData.mesero);
                   return (
-                    <div key={mesaKey} className="bg-gray-50 rounded-lg p-3 sm:p-4 border-2 border-gray-200">
+                    <div key={mesaKey} className="bg-white/5 rounded-lg p-3 sm:p-4 border border-white/10">
                       <div className="flex items-center justify-between mb-2 sm:mb-3">
                         <div className="flex items-center space-x-2 sm:space-x-3">
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center ${colorConfig.bg} border-2 ${colorConfig.border}`}>
                             <UtensilsCrossed className={`w-4 h-4 sm:w-6 sm:h-6 ${colorConfig.text}`} />
                           </div>
                           <div>
-                            <p className="text-base sm:text-lg font-bold text-gray-900">Mesa {numero}</p>
-                            <p className="text-xs sm:text-sm text-gray-600 truncate max-w-[120px] sm:max-w-none">{mesaData.mesero}</p>
+                            <p className="text-base sm:text-lg font-bold text-white">Mesa {numero}</p>
+                            <p className="text-xs sm:text-sm text-slate-400 truncate max-w-[120px] sm:max-w-none">{mesaData.mesero}</p>
                           </div>
                         </div>
-                        <p className="text-xl sm:text-2xl font-bold text-green-600">${mesaData.total.toLocaleString()}</p>
+                        <p className="text-xl sm:text-2xl font-bold text-emerald-300">${mesaData.total.toLocaleString()}</p>
                       </div>
-                      <div className="bg-white rounded p-2 sm:p-3 space-y-1">
+                      <div className="bg-black/20 rounded p-2 sm:p-3 space-y-1">
                         {mesaData.pedidos?.map((pedido, idx) => (
                           <div key={idx} className="flex justify-between text-xs sm:text-sm">
-                            <span className="text-gray-700 truncate flex-1 mr-2">
+                            <span className="text-slate-300 truncate flex-1 mr-2">
                               {pedido.cantidad}x {nombreItem(pedido)}
                             </span>
-                            <span className="text-gray-900 font-medium whitespace-nowrap">
+                            <span className="text-white font-medium whitespace-nowrap">
                               ${subtotal(pedido).toLocaleString()}
                             </span>
                           </div>

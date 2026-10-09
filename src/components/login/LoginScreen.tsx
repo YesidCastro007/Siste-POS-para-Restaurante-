@@ -1,4 +1,6 @@
-import { User, Lock, ChefHat, UtensilsCrossed, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import logoVertical from '@/assets/marca/shadow-stacked-blanco.svg';
+import logoHorizontal from '@/assets/marca/shadow-horizontal-blanco.svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,10 +9,11 @@ import { cerrarSesion } from '@/lib/auth';
 export default function LoginScreen({ email, setEmail, password, setPassword, role, setRole, handleLogin, isHovered, setIsHovered, isLoading, loginAttempts, isBlocked, blockTimeLeft, showRegister, setShowRegister, registerData, setRegisterData, handleRegister, showPassword, setShowPassword, showForgotPassword, setShowForgotPassword, resetEmail, setResetEmail, newPassword, setNewPassword, confirmNewPassword, setConfirmNewPassword, resetStep, setResetStep, handleForgotPassword }) {
   if (showRegister) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white/5 backdrop-blur-xl border-red-900/20 shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-white text-center">Crear Usuario</CardTitle>
+      <div className="min-h-screen fondo-shadow flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-cyan-400/15 shadow-2xl rounded-2xl">
+          <CardHeader className="space-y-4">
+            <img src={logoHorizontal} alt="SHADOW" className="h-10 mx-auto brillo-cian" />
+            <CardTitle className="font-marca text-white text-center">Crear Usuario</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -18,7 +21,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
               <Input
                 value={registerData.name}
                 onChange={(e) => setRegisterData({...registerData, name: e.target.value})}
-                className="bg-white/5 border-red-900/30 text-white"
+                className="bg-white/5 border-cyan-400/15 text-white"
                 placeholder="Ingrese nombre completo"
               />
             </div>
@@ -29,7 +32,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                 type="email"
                 value={registerData.email}
                 onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
-                className="bg-white/5 border-red-900/30 text-white"
+                className="bg-white/5 border-cyan-400/15 text-white"
                 placeholder="usuario@gmail.com"
               />
             </div>
@@ -40,7 +43,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                 type="password"
                 value={registerData.password}
                 onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                className="bg-white/5 border-red-900/30 text-white"
+                className="bg-white/5 border-cyan-400/15 text-white"
                 placeholder="Mínimo 6 caracteres"
               />
             </div>
@@ -51,16 +54,15 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                 type="password"
                 value={registerData.confirmPassword}
                 onChange={(e) => setRegisterData({...registerData, confirmPassword: e.target.value})}
-                className="bg-white/5 border-red-900/30 text-white"
+                className="bg-white/5 border-cyan-400/15 text-white"
                 placeholder="Repita la contraseña"
               />
             </div>
             
-            <div className="text-center p-3 bg-blue-600/10 border border-blue-600/30 rounded-lg">
-              <p className="text-blue-300 text-sm font-medium">ℹ️ Información</p>
-              <p className="text-blue-200 text-xs mt-1">
-                Todos los nuevos usuarios se registran como <strong>Mesero</strong>.
-                Para roles administrativos, contacte al administrador.
+            <div className="text-center p-3 bg-cyan-400/10 border border-cyan-400/20 rounded-lg">
+              <p className="text-cyan-300 text-sm font-medium">ℹ️ Información</p>
+              <p className="text-cyan-100 text-xs mt-1">
+                Las cuentas nuevas se crean como <strong>Mesero</strong> y el dueño las activa desde su panel.
               </p>
             </div>
             
@@ -68,14 +70,14 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
               <Button
                 onClick={() => setShowRegister(false)}
                 variant="outline"
-                className="flex-1 border-gray-600 text-gray-400"
+                className="flex-1 bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleRegister}
                 disabled={isLoading}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                className="flex-1 boton-marca"
               >
                 {isLoading ? 'Creando...' : 'Crear Usuario'}
               </Button>
@@ -87,81 +89,75 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center">
-        
-        {/* Logo y branding */}
-        <div className="hidden lg:flex flex-col items-center justify-center text-center space-y-8">
-          <div className="relative">
-            <div className="w-32 h-32 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center shadow-2xl shadow-red-600/50">
-              <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <UtensilsCrossed className="w-12 h-12 text-white" />
-              </div>
-            </div>
-            <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-              <ChefHat className="w-4 h-4 text-yellow-900" />
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <h1 className="text-6xl font-bold text-white">
-              Santandereano
-            </h1>
-            <p className="text-2xl text-red-300 font-light tracking-wider">
-              SAS
+    <div className="min-h-screen fondo-shadow flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-10 items-center">
+
+        {/* Marca */}
+        <div className="hidden lg:flex flex-col items-center text-center space-y-8">
+          <img src={logoVertical} alt="SHADOW" className="w-64 brillo-cian" />
+          <div className="space-y-3">
+            <p className="font-marca text-2xl font-semibold text-white">Tu restaurante, bajo control.</p>
+            <p className="text-slate-400 max-w-sm mx-auto">
+              Mesas, pedidos, caja y menú en tiempo real, desde cualquier celular.
             </p>
-            <div className="w-24 h-1 bg-gradient-to-r from-red-600 to-yellow-500 mx-auto rounded-full"></div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            {['Mesas en vivo', 'Caja y reportes', 'Menú editable'].map(texto => (
+              <span key={texto} className="px-3 py-1 rounded-full text-xs font-medium text-cyan-200 bg-cyan-400/10 border border-cyan-400/20">
+                {texto}
+              </span>
+            ))}
           </div>
         </div>
 
         {/* Formulario de login */}
-        <Card className="bg-white/5 backdrop-blur-xl border-red-900/20 shadow-2xl">
-          <CardHeader className="space-y-6">
-            <div className="lg:hidden text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <UtensilsCrossed className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-3xl font-bold text-white">Santandereano</h1>
-              <p className="text-red-300">SAS</p>
+        <Card className="bg-slate-900/60 backdrop-blur-xl border border-cyan-400/15 shadow-2xl shadow-black/40 rounded-2xl w-full max-w-md mx-auto">
+          <CardHeader className="space-y-6 p-6 sm:p-8">
+            <div className="lg:hidden flex justify-center">
+              <img src={logoHorizontal} alt="SHADOW" className="h-12 brillo-cian" />
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-white text-center mb-6">Bienvenido</h2>
+            <div className="space-y-5">
+              <div className="text-center">
+                <h2 className="font-marca text-2xl font-bold text-white">Bienvenido</h2>
+                <p className="text-slate-400 text-sm mt-1">Ingresa con tu cuenta</p>
+              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Email
                 </label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <Input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className="w-full bg-white/5 border-red-900/30 pl-12 py-3 text-white placeholder-gray-500 focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
+                    className="w-full h-12 bg-white/5 border-white/10 pl-12 text-white placeholder:text-slate-500 focus-visible:ring-cyan-400/40 focus-visible:border-cyan-400"
                     placeholder="usuario@gmail.com"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Contraseña
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <Input
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className="w-full bg-white/5 border-red-900/30 pl-12 pr-12 py-3 text-white placeholder-gray-500 focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
+                    className="w-full h-12 bg-white/5 border-white/10 pl-12 pr-12 text-white placeholder:text-slate-500 focus-visible:ring-cyan-400/40 focus-visible:border-cyan-400"
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -173,10 +169,8 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                 disabled={isLoading || isBlocked}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                className={`w-full font-medium py-4 transition-all duration-300 shadow-lg hover:shadow-red-600/50 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${
-                  isBlocked 
-                    ? 'bg-red-800 text-white cursor-not-allowed'
-                    : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-red-600/30'
+                className={`w-full h-12 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isBlocked ? 'bg-slate-700 text-white cursor-not-allowed' : 'boton-marca'
                 }`}
               >
                 <span className="flex items-center justify-center gap-2">
@@ -202,34 +196,23 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
 
               <button
                 onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-blue-400 hover:text-blue-300 transition-colors text-center w-full"
+                className="text-sm text-cyan-300 hover:text-cyan-200 transition-colors text-center w-full"
               >
                 ¿Olvidaste tu contraseña?
               </button>
 
               {loginAttempts > 0 && !isBlocked && (
-                <div className="text-center">
-                  <p className="text-yellow-400 text-sm">
-                    ⚠️ Intentos fallidos: {loginAttempts}/3
-                  </p>
-                </div>
+                <p className="text-amber-300 text-sm text-center">
+                  ⚠️ Intentos fallidos: {loginAttempts}/3
+                </p>
               )}
 
-              <div className="text-center space-y-2">
-                <p className="text-xs text-gray-500">
-                  Usuario por defecto:
-                </p>
-                <div className="text-xs text-gray-400 space-y-1">
-                  <p className="text-red-400 text-xs mt-2">
-                    🛡️ Máximo 3 intentos. Bloqueo: 30s
-                  </p>
-                </div>
-                
+              <div className="pt-4 border-t border-white/10 text-center space-y-3">
+                <p className="text-sm text-slate-400">¿Eres nuevo en el equipo?</p>
                 <Button
                   onClick={() => setShowRegister(true)}
                   variant="outline"
-                  size="sm"
-                  className="mt-4 border-green-600 text-green-400 hover:bg-green-600 hover:text-white"
+                  className="w-full h-11 bg-transparent border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10 hover:text-white"
                 >
                   Crear Nuevo Usuario
                 </Button>
@@ -238,15 +221,15 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
           </CardHeader>
         </Card>
       </div>
-      
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center text-gray-500 text-sm">
-        Panel Administrativo • Santandereano ID © 2025
-      </div>
+
+      <p className="mt-8 lg:absolute lg:bottom-4 text-center text-slate-500 text-xs">
+        SHADOW © {new Date().getFullYear()} · Sistema POS para restaurantes
+      </p>
 
       {/* Modal Recuperar Contraseña */}
       {showForgotPassword && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md bg-white/5 backdrop-blur-xl border-red-900/20 shadow-2xl">
+          <Card className="w-full max-w-md bg-slate-900/90 backdrop-blur-xl border border-cyan-400/15 shadow-2xl rounded-2xl">
             <CardHeader>
               <CardTitle className="text-white text-center">
                 {resetStep === 1 && '🔐 Recuperar Contraseña'}
@@ -262,12 +245,12 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                       type="email"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      className="bg-white/5 border-red-900/30 text-white"
+                      className="bg-white/5 border-cyan-400/15 text-white"
                       placeholder="usuario@gmail.com"
                     />
                   </div>
-                  <div className="text-center p-3 bg-blue-600/10 border border-blue-600/30 rounded-lg">
-                    <p className="text-blue-200 text-xs">
+                  <div className="text-center p-3 bg-cyan-400/10 border border-cyan-400/20 rounded-lg">
+                    <p className="text-cyan-100 text-xs">
                       Le enviaremos un enlace a su correo para crear una nueva contraseña.
                     </p>
                   </div>
@@ -282,7 +265,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="bg-white/5 border-red-900/30 text-white"
+                      className="bg-white/5 border-cyan-400/15 text-white"
                       placeholder="Mínimo 6 caracteres"
                     />
                   </div>
@@ -292,7 +275,7 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                       type="password"
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      className="bg-white/5 border-red-900/30 text-white"
+                      className="bg-white/5 border-cyan-400/15 text-white"
                       placeholder="Repita la contraseña"
                     />
                   </div>
@@ -311,13 +294,13 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                     setConfirmNewPassword('');
                   }}
                   variant="outline"
-                  className="flex-1 border-gray-600 text-gray-400"
+                  className="flex-1 bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
                 >
                   Cancelar
                 </Button>
                 <Button
                   onClick={handleForgotPassword}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  className="flex-1 boton-marca"
                 >
                   {resetStep === 1 && 'Enviar Enlace'}
                   {resetStep === 3 && 'Cambiar Contraseña'}

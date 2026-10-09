@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LogOut, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MarcaEncabezado } from '@/components/marca/Marca';
+import { useNombreNegocio } from '@/hooks/useNombreNegocio';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMenu, cargarZonas, ZONAS_POR_DEFECTO, type Categoria, type Zona } from '@/lib/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
@@ -9,6 +11,7 @@ import ModalPedido from './ModalPedido';
 import ModalCobro from './ModalCobro';
 
 export default function MeseroDashboard({ user, onLogout }) {
+  const negocio = useNombreNegocio();
   const [zonaActual, setZonaActual] = useState(1);
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
   const [mesas, setMesas] = useState({});
@@ -123,24 +126,12 @@ export default function MeseroDashboard({ user, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen fondo-shadow">
       {/* Header */}
-      <div className="bg-white/5 backdrop-blur-md border-b border-red-900/20 sticky top-0 z-40">
+      <div className="bg-[#070D1C]/85 backdrop-blur-md border-b border-cyan-400/10 sticky top-0 z-40">
         <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center">
-                <UtensilsCrossed className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-xl font-bold text-white">
-                  Santandereano SAS
-                </h1>
-                <p className="text-xs sm:text-sm text-red-300 hidden sm:block">
-                  Panel de Mesero
-                </p>
-              </div>
-            </div>
+            <MarcaEncabezado panel="Panel de Mesero" negocio={negocio} />
 
             <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="text-right hidden sm:block">
@@ -151,7 +142,7 @@ export default function MeseroDashboard({ user, onLogout }) {
                 onClick={onLogout}
                 variant="outline"
                 size="sm"
-                className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                className="border-slate-600 text-slate-300 bg-transparent hover:bg-slate-800 hover:text-white"
               >
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -162,7 +153,7 @@ export default function MeseroDashboard({ user, onLogout }) {
 
       <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-3 sm:space-y-6">
         {/* Selector de Pisos */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardContent className="p-3 sm:p-6">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
               {zonas.map((z) => (
@@ -172,8 +163,8 @@ export default function MeseroDashboard({ user, onLogout }) {
                   variant={zona.numero === z.numero ? "default" : "outline"}
                   className={`flex-1 h-auto py-4 sm:py-6 px-3 sm:px-6 rounded-xl font-medium transition-all duration-300 ${
                     zona.numero === z.numero
-                      ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/30'
-                      : 'bg-white/5 text-gray-400 hover:bg-white/10 border-red-900/20'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10 border-cyan-400/10'
                   }`}
                 >
                   <div className="text-center">
@@ -187,11 +178,11 @@ export default function MeseroDashboard({ user, onLogout }) {
         </Card>
 
         {/* Leyenda de Colores */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardContent className="p-2 sm:p-4">
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm">
               <div className="flex items-center space-x-1 sm:space-x-2">
-                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-600/20 border border-green-600 rounded"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500/10 border border-emerald-400 rounded"></div>
                 <span className="text-gray-300">Disponible</span>
               </div>
               <div className="flex items-center space-x-1 sm:space-x-2">
@@ -207,7 +198,7 @@ export default function MeseroDashboard({ user, onLogout }) {
         </Card>
 
         {/* Grid de Mesas */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
+        <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="text-base sm:text-lg text-white">Mesas - {zona.nombre}</CardTitle>
           </CardHeader>
@@ -222,20 +213,20 @@ export default function MeseroDashboard({ user, onLogout }) {
                 const esMiMesa = meseroAsignado === user.name;
 
                 // Definir colores según el estado y mesero
-                let clasesMesa = 'aspect-square rounded-xl p-4 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ';
+                let clasesMesa = 'w-full h-auto aspect-square rounded-xl p-2 sm:p-4 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ';
                 
                 if (ocupada) {
                   const colorConfig = getMeseroColorConfig(meseroAsignado);
                   if (esMiMesa) {
                     // Mi mesa - color del mesero con mayor intensidad
-                    clasesMesa += `${colorConfig.bg} border-2 ${colorConfig.border} shadow-lg ${colorConfig.shadow} ${colorConfig.text}`;
+                    clasesMesa += `hover:bg-white/10 hover:text-white ${colorConfig.bg} border-2 ${colorConfig.border} shadow-lg ${colorConfig.shadow} ${colorConfig.text}`;
                   } else {
                     // Mesa de otro mesero - color tenue
-                    clasesMesa += `${colorConfig.bgLight} border-2 ${colorConfig.borderLight} shadow-lg ${colorConfig.shadowLight} ${colorConfig.textLight}`;
+                    clasesMesa += `hover:bg-white/10 hover:text-white ${colorConfig.bgLight} border-2 ${colorConfig.borderLight} shadow-lg ${colorConfig.shadowLight} ${colorConfig.textLight}`;
                   }
                 } else {
                   // Mesa disponible
-                  clasesMesa += 'bg-green-600/20 border-2 border-green-600/50 hover:border-green-500 text-green-300';
+                  clasesMesa += 'bg-emerald-500/10 border-2 border-emerald-400/40 hover:border-emerald-300 hover:bg-emerald-500/15 text-emerald-300';
                 }
 
                 return (
