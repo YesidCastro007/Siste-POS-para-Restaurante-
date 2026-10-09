@@ -86,7 +86,7 @@ Google no deja usar tu contraseña normal; hay que crear una especial solo para 
 1. En Supabase ve a **Authentication → Emails → SMTP Settings**.
 2. Activa **Enable custom SMTP** y llena:
    - **Sender email:** tu Gmail (el mismo del paso 6.1)
-   - **Sender name:** `Santandereano SAS`
+   - **Sender name:** `SHADOW`
    - **Host:** `smtp.gmail.com`
    - **Port number:** `465`
    - **Username:** tu Gmail
@@ -96,8 +96,8 @@ Google no deja usar tu contraseña normal; hay que crear una especial solo para 
 ### 6.3 Poner el correo en español
 
 1. Ve a **Authentication → Emails → Templates** y elige **Reset Password**.
-2. En **Subject** escribe: `Recupera tu contraseña - Santandereano SAS`
-3. En el cuerpo (**Message body**) borra lo que hay y pega todo el contenido de `supabase/templates/recuperar-contrasena.html`. Es un correo con el nombre y los colores del restaurante, un botón para crear la contraseña nueva y el enlace de respaldo.
+2. En **Subject** escribe: `Recupera tu contraseña · SHADOW`
+3. En el cuerpo (**Message body**) borra lo que hay y pega todo el contenido de `supabase/templates/recuperar-contrasena.html`. Es un correo con el logo y los colores de SHADOW, un botón para crear la contraseña nueva y el enlace de respaldo. El logo se carga desde tu app en Vercel (`public/correo/shadow-logo.png`), así que el **Site URL** del paso 2 debe ser la dirección de producción.
 4. Pulsa **Save changes**.
 
 ### 6.4 Probar
