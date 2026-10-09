@@ -1,14 +1,27 @@
 import React, { useState } from 'react';
-import { LogOut, UtensilsCrossed, X, Plus, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, FileText, MessageCircle } from 'lucide-react';
+import { LogOut, UtensilsCrossed, X, Plus, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, FileText, MessageCircle, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MENU_DATA, SABORES_POR_DEFECTO } from '@/data/menu';
+import EditorMenu from '@/components/menu/EditorMenu';
+import EditorZonas from '@/components/menu/EditorZonas';
+import { type ItemPedido, nombreItem, detalleItem, subtotal, precioUnitario, categoriaItem } from '@/lib/pedidos';
 import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
 import CajeroMesasView from '@/components/CajeroMesasView';
 import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
+
+// Suma las categorías del cierre en bebidas (las que tienen "bebida" en el nombre) y alimentos (el resto)
+const bebidasYAlimentos = (categorias: Record<string, { cantidad: number; ingresos: number }>) => {
+  const suma = { bebidas: { cantidad: 0, ingresos: 0 }, alimentos: { cantidad: 0, ingresos: 0 } };
+  Object.entries(categorias).forEach(([nombre, datos]) => {
+    const grupo = /bebida/i.test(nombre) ? suma.bebidas : suma.alimentos;
+    grupo.cantidad += datos.cantidad;
+    grupo.ingresos += datos.ingresos;
+  });
+  return suma;
+};
 
 // Fecha desde la que se muestran las ventas según el periodo elegido (null = todas)
 const inicioDelFiltro = (filtro: string): Date | null => {
@@ -22,10 +35,6 @@ const inicioDelFiltro = (filtro: string): Date | null => {
 
 export default function CajeraDashboard({ user, onLogout }) {
   const [ventasHoy, setVentasHoy] = useState([]);
-  const [saboresSopas, setSaboresSopas] = useState([]);
-  const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
-  const [nuevoSabor, setNuevoSabor] = useState('');
-  const [mostrarAgregarSabor, setMostrarAgregarSabor] = useState(false);
   const [filtroFecha, setFiltroFecha] = useState('hoy');
   const [busquedaMesa, setBusquedaMesa] = useState('');
   const [mostrarDetalleVenta, setMostrarDetalleVenta] = useState(null);
@@ -33,13 +42,13 @@ export default function CajeraDashboard({ user, onLogout }) {
   const [fechaApertura, setFechaApertura] = useState(null);
   const [mostrarReporte, setMostrarReporte] = useState(false);
   const [reporteCierre, setReporteCierre] = useState(null);
-  const [vistaActual, setVistaActual] = useState('ventas'); // 'ventas' o 'mesas'
+  const [vistaActual, setVistaActual] = useState('ventas'); // 'ventas', 'mesas' o 'menu'
   const [numeroWhatsApp, setNumeroWhatsApp] = useState('');
   const [mostrarConfigWhatsApp, setMostrarConfigWhatsApp] = useState(false);
 
   const [numeroConfigurado, setNumeroConfigurado] = useState('');
 
-  // Ventas, sabores, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
+  // Ventas, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
   // Solo se descargan las ventas que se muestran: las del turno si la caja está abierta,
   // o las del periodo elegido si está cerrada
   const filtroFechaRef = React.useRef(filtroFecha);
@@ -52,16 +61,12 @@ export default function CajeraDashboard({ user, onLogout }) {
       const desde = estadoCaja.abierta && estadoCaja.fechaApertura
         ? new Date(estadoCaja.fechaApertura)
         : inicioDelFiltro(filtroFechaRef.current);
-      const [ventas, sabores, precio, numero] = await Promise.all([
+      const [ventas, numero] = await Promise.all([
         cargarVentas(desde),
-        leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
-        leerConfig('precio_sopas', MENU_DATA.sopas.price),
         leerConfig('whatsapp_numero', '')
       ]);
       if (carga !== numeroCarga.current) return;
       setVentasHoy(ventas);
-      setSaboresSopas(sabores);
-      setPrecioSopas(Number(precio));
       setCajaAbierta(!!estadoCaja.abierta);
       setFechaApertura(estadoCaja.fechaApertura);
       setNumeroConfigurado(numero);
@@ -181,55 +186,21 @@ export default function CajeraDashboard({ user, onLogout }) {
       return acc;
     }, {});
     
-    // Análisis por categorías y productos
-    const categorias = {
-      'Picadas': { cantidad: 0, ingresos: 0, productos: {} },
-      'Gallina': { cantidad: 0, ingresos: 0, productos: {} },
-      'Sopas': { cantidad: 0, ingresos: 0, productos: {} },
-      'Bebidas': { cantidad: 0, ingresos: 0, productos: {} },
-      'Adicionales': { cantidad: 0, ingresos: 0, productos: {} }
-    };
-    
+    // Análisis por categorías y productos (las categorías son las del menú de cada negocio)
+    const categorias = {};
     ventas.forEach(venta => {
-      venta.pedidos?.forEach(pedido => {
+      venta.pedidos?.forEach((pedido: ItemPedido) => {
         const cantidad = pedido.cantidad;
-        const precio = pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem;
-        const subtotal = cantidad * precio;
-        
-        let categoria = '';
-        let nombreProducto = '';
-        
-        if (pedido.tipo === 'picada') {
-          categoria = 'Picadas';
-          nombreProducto = `Picada ${pedido.size}`;
-        } else if (pedido.tipo === 'gallina') {
-          categoria = 'Gallina';
-          nombreProducto = pedido.nombre;
-        } else if (pedido.tipo === 'sopa') {
-          categoria = 'Sopas';
-          nombreProducto = pedido.nombre;
-        } else if (pedido.tipo === 'bebida') {
-          categoria = 'Bebidas';
-          nombreProducto = pedido.nombre;
-        } else if (pedido.tipo === 'adicional') {
-          categoria = 'Adicionales';
-          nombreProducto = pedido.nombre;
-        }
-        
-        if (categoria && categorias[categoria]) {
-          categorias[categoria].cantidad += cantidad;
-          categorias[categoria].ingresos += subtotal;
-          
-          if (!categorias[categoria].productos[nombreProducto]) {
-            categorias[categoria].productos[nombreProducto] = {
-              cantidad: 0,
-              ingresos: 0,
-              precioUnitario: precio
-            };
-          }
-          categorias[categoria].productos[nombreProducto].cantidad += cantidad;
-          categorias[categoria].productos[nombreProducto].ingresos += subtotal;
-        }
+        const precio = precioUnitario(pedido);
+        const ingresos = subtotal(pedido);
+        const categoria = categoriaItem(pedido);
+        const nombreProducto = nombreItem(pedido);
+        categorias[categoria] ??= { cantidad: 0, ingresos: 0, productos: {} };
+        categorias[categoria].cantidad += cantidad;
+        categorias[categoria].ingresos += ingresos;
+        categorias[categoria].productos[nombreProducto] ??= { cantidad: 0, ingresos: 0, precioUnitario: precio };
+        categorias[categoria].productos[nombreProducto].cantidad += cantidad;
+        categorias[categoria].productos[nombreProducto].ingresos += ingresos;
       });
     });
     
@@ -248,32 +219,6 @@ export default function CajeraDashboard({ user, onLogout }) {
       cajero: user.name,
       categorias: categorias
     };
-  };
-
-  const agregarSabor = () => {
-    if (!nuevoSabor.trim()) {
-      alert('Ingrese un nombre para el sabor');
-      return;
-    }
-    
-    if (saboresSopas.includes(nuevoSabor.trim())) {
-      alert('Este sabor ya existe');
-      return;
-    }
-    
-    const nuevosSabores = [...saboresSopas, nuevoSabor.trim()];
-    setSaboresSopas(nuevosSabores);
-    guardarAjuste('sabores_sopas', nuevosSabores);
-    setNuevoSabor('');
-    setMostrarAgregarSabor(false);
-  };
-
-  const eliminarSabor = (sabor) => {
-    if (confirm(`¿Está seguro de eliminar "${sabor}"?`)) {
-      const nuevosSabores = saboresSopas.filter(s => s !== sabor);
-      setSaboresSopas(nuevosSabores);
-      guardarAjuste('sabores_sopas', nuevosSabores);
-    }
   };
 
   const filtrarVentas = () => {
@@ -335,7 +280,7 @@ export default function CajeraDashboard({ user, onLogout }) {
         {/* Selector de Vista */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <Button
                 onClick={() => setVistaActual('ventas')}
                 className={`h-16 flex flex-col items-center justify-center transition-all ${
@@ -358,12 +303,28 @@ export default function CajeraDashboard({ user, onLogout }) {
                 <UtensilsCrossed className="w-6 h-6 mb-1" />
                 <span className="text-sm font-medium">Vista de Mesas</span>
               </Button>
+              <Button
+                onClick={() => setVistaActual('menu')}
+                className={`h-16 flex flex-col items-center justify-center transition-all ${
+                  vistaActual === 'menu'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-900/20'
+                }`}
+              >
+                <BookOpen className="w-6 h-6 mb-1" />
+                <span className="text-sm font-medium">Menú y Mesas</span>
+              </Button>
             </div>
           </CardContent>
         </Card>
 
         {vistaActual === 'mesas' ? (
           <CajeroMesasView />
+        ) : vistaActual === 'menu' ? (
+          <div className="space-y-6">
+            <EditorMenu />
+            <EditorZonas />
+          </div>
         ) : (
           <>
         {/* Botones de Apertura/Cierre de Caja */}
@@ -556,48 +517,6 @@ export default function CajeraDashboard({ user, onLogout }) {
           </CardContent>
         </Card>
 
-        {/* Gestión de Sabores de Sopas */}
-        <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center">
-                <span className="text-2xl mr-2">🍲</span>
-                Gestión de Sopas
-              </CardTitle>
-              <Button
-                onClick={() => setMostrarAgregarSabor(true)}
-                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar Sabor
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4 p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30">
-              <div className="flex justify-between items-center">
-                <span className="text-white font-medium">Precio actual de sopas:</span>
-                <span className="text-2xl font-bold text-blue-400">${precioSopas.toLocaleString()}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {saboresSopas.map((sabor, index) => (
-                <div key={index} className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-lg p-4 flex items-center justify-between">
-                  <span className="text-white font-medium">{sabor}</span>
-                  <Button
-                    onClick={() => eliminarSabor(sabor)}
-                    variant="outline"
-                    size="sm"
-                    className="w-8 h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Filtros y Búsqueda */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardContent className="p-6">
@@ -709,44 +628,6 @@ export default function CajeraDashboard({ user, onLogout }) {
         )}
       </div>
 
-      {/* Modal Agregar Sabor */}
-      {mostrarAgregarSabor && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md bg-gradient-to-br from-slate-900/95 via-red-900/95 to-slate-900/95 backdrop-blur-xl border border-red-500/30">
-            <CardHeader>
-              <CardTitle className="text-white">Agregar Nuevo Sabor</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-red-300 mb-2">Nombre del Sabor</label>
-                <Input
-                  value={nuevoSabor}
-                  onChange={(e) => setNuevoSabor(e.target.value)}
-                  placeholder="Ej: Sopa de mondongo"
-                  className="bg-white/5 border-red-500/30 text-white"
-                  onKeyPress={(e) => e.key === 'Enter' && agregarSabor()}
-                />
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  onClick={() => setMostrarAgregarSabor(false)}
-                  variant="outline"
-                  className="flex-1 border-gray-600 text-gray-400"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={agregarSabor}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-                >
-                  Agregar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {/* Modal Detalle de Venta */}
       {mostrarDetalleVenta && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -794,16 +675,14 @@ export default function CajeraDashboard({ user, onLogout }) {
                       <div key={index} className="flex justify-between items-center bg-white/5 rounded-lg p-3">
                         <div>
                           <p className="text-white font-medium">
-                            {pedido.cantidad}x {pedido.tipo === 'picada' ? `Picada ${pedido.size}` : pedido.nombre}
+                            {pedido.cantidad}x {nombreItem(pedido)}
                           </p>
-                          {pedido.tipo === 'picada' && (
-                            <p className="text-gray-400 text-sm">
-                              {pedido.carnes?.join(', ')} • {pedido.termino}
-                            </p>
+                          {detalleItem(pedido) && (
+                            <p className="text-gray-400 text-sm">{detalleItem(pedido)}</p>
                           )}
                         </div>
                         <p className="text-green-400 font-bold">
-                          ${((pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem) * pedido.cantidad).toLocaleString()}
+                          ${subtotal(pedido).toLocaleString()}
                         </p>
                       </div>
                     ))}
@@ -1005,25 +884,19 @@ export default function CajeraDashboard({ user, onLogout }) {
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                       <h4 className="font-semibold text-blue-800">Bebidas</h4>
                       <p className="text-2xl font-bold text-blue-600">
-                        {reporteCierre.categorias.Bebidas?.cantidad || 0}
+                        {bebidasYAlimentos(reporteCierre.categorias).bebidas.cantidad}
                       </p>
                       <p className="text-sm text-blue-600">
-                        ${(reporteCierre.categorias.Bebidas?.ingresos || 0).toLocaleString()}
+                        ${bebidasYAlimentos(reporteCierre.categorias).bebidas.ingresos.toLocaleString()}
                       </p>
                     </div>
                     <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                       <h4 className="font-semibold text-orange-800">Alimentos</h4>
                       <p className="text-2xl font-bold text-orange-600">
-                        {(reporteCierre.categorias.Picadas?.cantidad || 0) + 
-                         (reporteCierre.categorias.Gallina?.cantidad || 0) + 
-                         (reporteCierre.categorias.Sopas?.cantidad || 0) + 
-                         (reporteCierre.categorias.Adicionales?.cantidad || 0)}
+                        {bebidasYAlimentos(reporteCierre.categorias).alimentos.cantidad}
                       </p>
                       <p className="text-sm text-orange-600">
-                        ${((reporteCierre.categorias.Picadas?.ingresos || 0) + 
-                           (reporteCierre.categorias.Gallina?.ingresos || 0) + 
-                           (reporteCierre.categorias.Sopas?.ingresos || 0) + 
-                           (reporteCierre.categorias.Adicionales?.ingresos || 0)).toLocaleString()}
+                        ${bebidasYAlimentos(reporteCierre.categorias).alimentos.ingresos.toLocaleString()}
                       </p>
                     </div>
                   </div>

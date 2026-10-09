@@ -19,6 +19,7 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 4. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
 5. Pega el contenido de `supabase/migrations/004_dueno_gestiona_usuarios.sql` y pulsa **Run**. Esto deja que el dueño cambie roles y desactive usuarios desde su panel.
 6. Pega el contenido de `supabase/migrations/005_robustez.sql` y pulsa **Run**. Esto hace que solo el personal **activo** pueda ver y cambiar datos, y que las cuentas nuevas queden inactivas hasta que el dueño las active.
+7. Pega el contenido de `supabase/migrations/006_menu_y_mesas.sql` y pulsa **Run**. Esto crea el menú editable (categorías y productos) y las zonas de mesas. Si el menú está vacío, carga el menú que tenía la app. Después, el dueño y la cajera cambian platos, precios y mesas desde **Menú y mesas** en su panel.
 
 ## 3. Configurar las direcciones de la app
 
