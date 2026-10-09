@@ -1,4 +1,5 @@
 import type { Venta } from '@/lib/datos';
+import { type ItemPedido, nombreItem, precioUnitario } from '@/lib/pedidos';
 
 // Cálculos del panel del dueño a partir de las ventas guardadas en Supabase.
 
@@ -10,15 +11,6 @@ export const PERIODOS: { id: Periodo; nombre: string }[] = [
   { id: 'mes', nombre: 'Este mes' },
   { id: 'todo', nombre: 'Todo' }
 ];
-
-interface Pedido {
-  tipo?: string;
-  nombre?: string;
-  size?: string;
-  cantidad?: number;
-  precio?: string | number;
-  precioItem?: number;
-}
 
 const inicioDelDia = (fecha: Date) => new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
 
@@ -78,15 +70,11 @@ export const porMetodo = (ventas: Venta[]) => {
   return ordenar(mapa);
 };
 
-const precioPedido = (p: Pedido) => (p.tipo === 'picada' ? parseInt(String(p.precio)) || 0 : p.precioItem || 0);
-
-const nombrePedido = (p: Pedido) => (p.tipo === 'picada' ? `Picada ${p.size ?? ''}`.trim() : p.nombre || 'Producto');
-
 export const productosMasVendidos = (ventas: Venta[], limite = 8) => {
   const mapa = new Map<string, Fila>();
-  ventas.forEach(v => (v.pedidos as Pedido[] | undefined)?.forEach(p => {
+  ventas.forEach(v => (v.pedidos as ItemPedido[] | undefined)?.forEach(p => {
     const cantidad = p.cantidad || 1;
-    sumar(mapa, nombrePedido(p), precioPedido(p) * cantidad, cantidad);
+    sumar(mapa, nombreItem(p), precioUnitario(p) * cantidad, cantidad);
   }));
   return ordenar(mapa).slice(0, limite);
 };

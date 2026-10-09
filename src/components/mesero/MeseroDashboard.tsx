@@ -2,41 +2,41 @@ import React, { useState } from 'react';
 import { LogOut, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MENU_DATA, PISOS, SABORES_POR_DEFECTO } from '@/data/menu';
+import { cargarMenu, cargarZonas, ZONAS_POR_DEFECTO, type Categoria, type Zona } from '@/lib/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
-import { cargarMesas, guardarCambiosMesas, liberarMesa, registrarVenta, leerConfig, mantenerActualizado } from '@/lib/datos';
+import { cargarMesas, guardarCambiosMesas, liberarMesa, registrarVenta, mantenerActualizado } from '@/lib/datos';
 import ModalPedido from './ModalPedido';
 import ModalCobro from './ModalCobro';
 
 export default function MeseroDashboard({ user, onLogout }) {
-  const [pisoActual, setPisoActual] = useState(1);
+  const [zonaActual, setZonaActual] = useState(1);
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
   const [mesas, setMesas] = useState({});
   const [mostrarPedido, setMostrarPedido] = useState(false);
   const [mostrarCobro, setMostrarCobro] = useState(false);
-  const [saboresSopas, setSaboresSopas] = useState([]);
-  const [precioSopas, setPrecioSopas] = useState(MENU_DATA.sopas.price);
+  const [menu, setMenu] = useState<Categoria[]>([]);
+  const [zonas, setZonas] = useState<Zona[]>(ZONAS_POR_DEFECTO);
 
   const mesasRef = React.useRef({});
   const escriturasPendientes = React.useRef(0);
   const colaEscrituras = React.useRef(Promise.resolve());
   const numeroCarga = React.useRef(0);
 
-  // Mesas y sabores se guardan en Supabase y se comparten entre dispositivos
+  // Mesas, menú y zonas se guardan en Supabase y se comparten entre dispositivos
   const cargarDatos = React.useCallback(async () => {
     const carga = ++numeroCarga.current;
     try {
-      const [mesasGuardadas, sabores, precio] = await Promise.all([
+      const [mesasGuardadas, menuGuardado, zonasGuardadas] = await Promise.all([
         cargarMesas(),
-        leerConfig('sabores_sopas', SABORES_POR_DEFECTO),
-        leerConfig('precio_sopas', MENU_DATA.sopas.price)
+        cargarMenu(),
+        cargarZonas()
       ]);
       // Se descarta si llegó una carga más nueva o si hay un guardado en curso
       if (carga !== numeroCarga.current || escriturasPendientes.current > 0) return;
       mesasRef.current = mesasGuardadas;
       setMesas(mesasGuardadas);
-      setSaboresSopas(sabores);
-      setPrecioSopas(Number(precio));
+      setMenu(menuGuardado);
+      setZonas(zonasGuardadas);
     } catch (error) {
       console.error('Error cargando datos:', error.message);
     }
@@ -68,9 +68,10 @@ export default function MeseroDashboard({ user, onLogout }) {
     return guardarEnSupabase(nuevasMesas, () => guardarCambiosMesas(anteriores, nuevasMesas));
   };
 
-  React.useEffect(() => mantenerActualizado(['mesas', 'config'], cargarDatos), [cargarDatos]);
+  React.useEffect(() => mantenerActualizado(['mesas', 'config', 'categorias', 'productos'], cargarDatos), [cargarDatos]);
 
-  const mesasDelPiso = PISOS.find(p => p.number === pisoActual)?.mesas || 0;
+  // Si la zona elegida ya no existe (el dueño la borró), se muestra la primera
+  const zona = zonas.find(z => z.numero === zonaActual) ?? zonas[0];
 
   const abrirMesa = (numeroMesa) => {
     setMesaSeleccionada(numeroMesa);
@@ -163,21 +164,21 @@ export default function MeseroDashboard({ user, onLogout }) {
         {/* Selector de Pisos */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardContent className="p-3 sm:p-6">
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
-              {PISOS.map((piso) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
+              {zonas.map((z) => (
                 <Button
-                  key={piso.number}
-                  onClick={() => setPisoActual(piso.number)}
-                  variant={pisoActual === piso.number ? "default" : "outline"}
-                  className={`flex-1 py-4 sm:py-6 px-3 sm:px-6 rounded-xl font-medium transition-all duration-300 ${
-                    pisoActual === piso.number
+                  key={z.numero}
+                  onClick={() => setZonaActual(z.numero)}
+                  variant={zona.numero === z.numero ? "default" : "outline"}
+                  className={`flex-1 h-auto py-4 sm:py-6 px-3 sm:px-6 rounded-xl font-medium transition-all duration-300 ${
+                    zona.numero === z.numero
                       ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/30'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 border-red-900/20'
                   }`}
                 >
                   <div className="text-center">
-                    <p className="text-base sm:text-lg font-bold">Piso {piso.number}</p>
-                    <p className="text-xs sm:text-sm opacity-80">{piso.mesas} mesas</p>
+                    <p className="text-base sm:text-lg font-bold truncate">{z.nombre}</p>
+                    <p className="text-xs sm:text-sm opacity-80">{z.mesas} mesas</p>
                   </div>
                 </Button>
               ))}
@@ -208,13 +209,13 @@ export default function MeseroDashboard({ user, onLogout }) {
         {/* Grid de Mesas */}
         <Card className="bg-white/5 backdrop-blur-md border-red-900/20">
           <CardHeader className="p-3 sm:p-6">
-            <CardTitle className="text-base sm:text-lg text-white">Mesas - Piso {pisoActual}</CardTitle>
+            <CardTitle className="text-base sm:text-lg text-white">Mesas - {zona.nombre}</CardTitle>
           </CardHeader>
           <CardContent className="p-2 sm:p-6">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4">
-              {Array.from({ length: mesasDelPiso }, (_, i) => {
+              {Array.from({ length: zona.mesas }, (_, i) => {
                 const numeroMesa = i + 1;
-                const mesaKey = `${pisoActual}-${numeroMesa}`;
+                const mesaKey = `${zona.numero}-${numeroMesa}`;
                 const mesaData = mesas[mesaKey];
                 const ocupada = mesaData && mesaData.pedidos?.length > 0;
                 const meseroAsignado = mesaData?.mesero;
@@ -272,26 +273,25 @@ export default function MeseroDashboard({ user, onLogout }) {
       {/* Modal de Pedido */}
       {mostrarPedido && (
         <ModalPedido
-          pisoActual={pisoActual}
+          zona={zona}
           mesaSeleccionada={mesaSeleccionada}
           mesas={mesas}
           setMesas={guardarMesas}
           onCerrar={cerrarPedido}
           onAbrirCobro={abrirCobro}
           user={user}
-          saboresSopas={saboresSopas}
-          precioSopas={precioSopas}
+          menu={menu}
         />
       )}
 
       {/* Modal de Cobro */}
       {mostrarCobro && mesaSeleccionada && (
         <ModalCobro
-          pisoActual={pisoActual}
+          zonaNombre={zona.nombre}
           mesaSeleccionada={mesaSeleccionada}
-          mesaData={mesas[`${pisoActual}-${mesaSeleccionada}`]}
+          mesaData={mesas[`${zona.numero}-${mesaSeleccionada}`]}
           onCerrar={() => setMostrarCobro(false)}
-          onProcesarCobro={(mesaData) => procesarCobro(`${pisoActual}-${mesaSeleccionada}`, mesaData)}
+          onProcesarCobro={(mesaData) => procesarCobro(`${zona.numero}-${mesaSeleccionada}`, mesaData)}
         />
       )}
     </div>

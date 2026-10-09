@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { nombreItem, subtotal } from '@/lib/pedidos';
 
-export default function ModalCobro({ pisoActual, mesaSeleccionada, mesaData, onCerrar, onProcesarCobro }) {
+export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onCerrar, onProcesarCobro }) {
   const [metodoPago, setMetodoPago] = useState('efectivo');
   const [tipoTransferencia, setTipoTransferencia] = useState('');
   const [montoPagado, setMontoPagado] = useState('');
@@ -60,7 +61,7 @@ export default function ModalCobro({ pisoActual, mesaSeleccionada, mesaData, onC
               </div>
               <div>
                 <CardTitle className="text-white text-xl">Procesar Cobro</CardTitle>
-                <p className="text-red-300 text-sm">Mesa {mesaSeleccionada} • Piso {pisoActual}</p>
+                <p className="text-red-300 text-sm">Mesa {mesaSeleccionada} • {zonaNombre}</p>
               </div>
             </div>
             <Button onClick={onCerrar} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
@@ -79,10 +80,10 @@ export default function ModalCobro({ pisoActual, mesaSeleccionada, mesaData, onC
                 {mesaData?.pedidos?.map((pedido, index) => (
                   <div key={index} className="flex justify-between items-center text-sm">
                     <span className="text-gray-300">
-                      {pedido.cantidad}x {pedido.tipo === 'picada' ? `Picada ${pedido.size}` : pedido.nombre}
+                      {pedido.cantidad}x {nombreItem(pedido)}
                     </span>
                     <span className="text-green-400 font-medium">
-                      ${((pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem) * pedido.cantidad).toLocaleString()}
+                      ${subtotal(pedido).toLocaleString()}
                     </span>
                   </div>
                 ))}

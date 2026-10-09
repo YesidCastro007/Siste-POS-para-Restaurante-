@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { LogOut, Crown, TrendingUp, Receipt, Calculator, UtensilsCrossed, Users } from 'lucide-react';
+import { LogOut, Crown, TrendingUp, Receipt, Calculator, UtensilsCrossed, Users, BarChart3, BookOpen } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, cargarVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
+import EditorMenu from '@/components/menu/EditorMenu';
+import EditorZonas from '@/components/menu/EditorZonas';
 import { actualizarUsuario, cargarUsuarios, type Rol, type Usuario } from '@/lib/auth';
 import {
   PERIODOS, inicioDelPeriodo, type Periodo, type Fila, filtrarPorPeriodo, resumen, porMesero, porMetodo,
@@ -154,6 +156,7 @@ function TooltipDia({ active, payload }: { active?: boolean; payload?: { payload
 
 export default function DueñoDashboard({ user, onLogout }) {
   const [periodo, setPeriodo] = useState<Periodo>('hoy');
+  const [seccion, setSeccion] = useState<'resumen' | 'menu' | 'usuarios'>('resumen');
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [mesas, setMesas] = useState<Mesas>({});
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -229,6 +232,34 @@ export default function DueñoDashboard({ user, onLogout }) {
       <div className="container mx-auto px-4 py-6 space-y-6">
         {error && <p className="rounded-lg bg-red-600/20 border border-red-500 text-red-100 px-4 py-3 text-sm">{error}</p>}
 
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {([
+            { id: 'resumen', nombre: 'Resumen', Icono: BarChart3 },
+            { id: 'menu', nombre: 'Menú y mesas', Icono: BookOpen },
+            { id: 'usuarios', nombre: 'Usuarios', Icono: Users }
+          ] as const).map(s => (
+            <Button
+              key={s.id}
+              onClick={() => setSeccion(s.id)}
+              className={`h-14 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${
+                seccion === s.id ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold' : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10'
+              }`}
+            >
+              <s.Icono className="w-5 h-5" />
+              <span className="text-xs sm:text-sm">{s.nombre}</span>
+            </Button>
+          ))}
+        </div>
+
+        {seccion === 'menu' && (
+          <>
+            <EditorMenu />
+            <EditorZonas />
+          </>
+        )}
+
+        {seccion === 'resumen' && (
+        <>
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map(p => (
             <Button
@@ -274,7 +305,10 @@ export default function DueñoDashboard({ user, onLogout }) {
           <Ranking titulo="Ventas por método de pago" filas={porMetodo(ventasDelPeriodo)} contar={ordenes} vacio="Sin ventas en este periodo" />
           <Ranking titulo="Productos más vendidos" filas={productosMasVendidos(ventasDelPeriodo)} contar={unidades} vacio="Sin ventas en este periodo" />
         </div>
+        </>
+        )}
 
+        {seccion === 'usuarios' && (
         <Card className="bg-white/5 border-white/10">
           <CardHeader className="p-4 sm:p-5 pb-2">
             <CardTitle className="text-white text-base sm:text-lg flex items-center">
@@ -291,6 +325,7 @@ export default function DueñoDashboard({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

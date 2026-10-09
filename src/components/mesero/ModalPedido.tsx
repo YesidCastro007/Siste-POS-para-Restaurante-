@@ -5,183 +5,150 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MENU_DATA } from '@/data/menu';
+import type { Categoria, Producto } from '@/lib/menu';
+import { type ItemPedido, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
 
-export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, saboresSopas, precioSopas }) {
-  const mesaKey = `${pisoActual}-${mesaSeleccionada}`;
+// Colores de las categorías, en orden
+const COLORES = [
+  'from-red-500 to-red-600',
+  'from-yellow-500 to-orange-500',
+  'from-green-500 to-green-600',
+  'from-blue-500 to-blue-600',
+  'from-purple-500 to-purple-600',
+  'from-pink-500 to-pink-600',
+  'from-teal-500 to-teal-600',
+  'from-amber-500 to-amber-600'
+];
+
+type Elegidas = Record<string, string | string[]>;
+
+interface Mesa {
+  pedidos: ItemPedido[];
+  total: number;
+  mesero: string;
+  fechaCreacion?: string;
+  fechaActualizacion?: string;
+}
+
+// Producto que necesita que el mesero escoja algo antes de agregarlo
+const necesitaConfigurar = (p: Producto) => p.precio_libre || p.opciones.length > 0;
+
+export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, menu }: {
+  zona: { numero: number; nombre: string };
+  mesaSeleccionada: number;
+  mesas: Record<string, Mesa>;
+  setMesas: (mesas: Record<string, Mesa>) => void;
+  onCerrar: () => void;
+  onAbrirCobro: () => void;
+  user: { name: string };
+  menu: Categoria[];
+}) {
+  const mesaKey = `${zona.numero}-${mesaSeleccionada}`;
   const mesaData = mesas[mesaKey] || { pedidos: [], total: 0, mesero: user.name };
-  const [pedidos, setPedidos] = useState(mesaData.pedidos || []);
-  const [categoriaActual, setCategoriaActual] = useState('picadas');
-  
-  // Estados para picadas
-  const [picadaConfig, setPicadaConfig] = useState({
-    size: '',
-    carnes: [],
-    termino: '',
-    precio: ''
-  });
-  
-  // Estados para otros productos
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-  const [terminoSeleccionado, setTerminoSeleccionado] = useState('');
-  const [saborSeleccionado, setSaborSeleccionado] = useState('');
-  const [categoriaBebidasActual, setCategoriaBebidasActual] = useState('');
-  const [bebidaSeleccionada, setBebidaSeleccionada] = useState('');
-  const [adicionalSeleccionado, setAdicionalSeleccionado] = useState('');
+  const [pedidos, setPedidos] = useState<ItemPedido[]>(mesaData.pedidos || []);
+  const categorias = menu.filter(c => c.productos.length > 0);
+  const [categoriaId, setCategoriaId] = useState<number | null>(categorias[0]?.id ?? null);
+  const categoriaActual = categorias.find(c => c.id === categoriaId) ?? categorias[0];
 
-  const calcularTotal = (listaPedidos) => {
-    return listaPedidos.reduce((total, pedido) => {
-      const precio = pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem;
-      return total + (precio * pedido.cantidad);
-    }, 0);
-  };
+  // Producto que se está configurando (opciones y precio)
+  const [configurando, setConfigurando] = useState<Producto | null>(null);
+  const [elegidas, setElegidas] = useState<Elegidas>({});
+  const [precioLibre, setPrecioLibre] = useState('');
 
-  const agregarPedido = (nuevoPedido) => {
-    // Crear una clave única para identificar productos iguales
-    const claveProducto = nuevoPedido.tipo === 'picada' 
-      ? `${nuevoPedido.tipo}-${nuevoPedido.size}-${nuevoPedido.carnes?.sort().join(',')}-${nuevoPedido.termino}`
-      : `${nuevoPedido.tipo}-${nuevoPedido.nombre}`;
-    
-    // Buscar si ya existe el mismo producto
-    const productoExistente = pedidos.find(p => {
-      const claveExistente = p.tipo === 'picada'
-        ? `${p.tipo}-${p.size}-${p.carnes?.sort().join(',')}-${p.termino}`
-        : `${p.tipo}-${p.nombre}`;
-      return claveExistente === claveProducto;
-    });
-    
-    if (productoExistente) {
-      // Si existe, incrementar la cantidad
-      const nuevosPedidos = pedidos.map(p => 
-        p.id === productoExistente.id 
-          ? { ...p, cantidad: p.cantidad + 1 }
-          : p
-      );
-      setPedidos(nuevosPedidos);
+  const agregarPedido = (nuevo: Omit<ItemPedido, 'id' | 'cantidad'>) => {
+    // Productos iguales (mismo producto, opciones y precio) se suman en la misma línea
+    const clave = (p: Omit<ItemPedido, 'id' | 'cantidad'>) =>
+      JSON.stringify([p.productoId ?? p.tipo, p.nombre ?? p.size, p.opciones ?? null, p.precioItem ?? p.precio]);
+    const existente = pedidos.find(p => clave(p) === clave(nuevo));
+    if (existente) {
+      setPedidos(pedidos.map(p => (p.id === existente.id ? { ...p, cantidad: p.cantidad + 1 } : p)));
     } else {
-      // Si no existe, agregar como nuevo
-      const pedidoConId = { ...nuevoPedido, id: Date.now(), cantidad: 1 };
-      const nuevosPedidos = [...pedidos, pedidoConId];
-      setPedidos(nuevosPedidos);
+      setPedidos([...pedidos, { ...nuevo, id: Date.now(), cantidad: 1 }]);
     }
-    
-    limpiarFormulario();
   };
 
-  const limpiarFormulario = () => {
-    setPicadaConfig({ size: '', carnes: [], termino: '', precio: '' });
-    setProductoSeleccionado(null);
-    setTerminoSeleccionado('');
-    setSaborSeleccionado('');
-    // NO limpiar categoriaBebidasActual y bebidaSeleccionada para mantener la categoría abierta
-    setAdicionalSeleccionado('');
+  const elegirProducto = (producto: Producto, categoria: Categoria) => {
+    if (!producto.disponible) return;
+    if (!necesitaConfigurar(producto)) {
+      agregarPedido({ productoId: producto.id, nombre: producto.nombre, categoria: categoria.nombre, precioItem: producto.precio });
+      return;
+    }
+    setConfigurando(producto);
+    setElegidas({});
+    setPrecioLibre('');
   };
 
-  const eliminarPedido = (id) => {
+  const elegirValor = (opcion: { nombre: string; varias: boolean }, valor: string) => {
+    if (!opcion.varias) {
+      setElegidas({ ...elegidas, [opcion.nombre]: valor });
+      return;
+    }
+    const actuales = (elegidas[opcion.nombre] as string[]) || [];
+    setElegidas({
+      ...elegidas,
+      [opcion.nombre]: actuales.includes(valor) ? actuales.filter(v => v !== valor) : [...actuales, valor]
+    });
+  };
+
+  const agregarConfigurado = () => {
+    if (!configurando || !categoriaActual) return;
+    const falta = configurando.opciones.find(o => {
+      const v = elegidas[o.nombre];
+      return o.valores.length > 0 && (!v || (Array.isArray(v) && v.length === 0));
+    });
+    if (falta) {
+      alert(`Seleccione ${falta.nombre.toLowerCase()}`);
+      return;
+    }
+    const precio = configurando.precio_libre ? parseInt(precioLibre) || 0 : configurando.precio;
+    if (configurando.precio_libre && precio <= 0) {
+      alert('Escriba el precio');
+      return;
+    }
+    // Las opciones se guardan en el mismo orden en que están en el menú
+    const opciones: Elegidas = {};
+    configurando.opciones.forEach(o => {
+      const v = elegidas[o.nombre];
+      if (v) opciones[o.nombre] = Array.isArray(v) ? o.valores.filter(x => v.includes(x)) : v;
+    });
+    agregarPedido({
+      productoId: configurando.id,
+      nombre: configurando.nombre,
+      categoria: categoriaActual.nombre,
+      precioItem: precio,
+      opciones
+    });
+    setConfigurando(null);
+  };
+
+  const eliminarPedido = (id: number) => {
     setPedidos(pedidos.filter(p => p.id !== id));
   };
 
-  const cambiarCantidad = (id, nuevaCantidad) => {
+  const cambiarCantidad = (id: number, nuevaCantidad: number) => {
     if (nuevaCantidad < 1) return;
     setPedidos(pedidos.map(p => p.id === id ? { ...p, cantidad: nuevaCantidad } : p));
   };
 
-  const guardarPedido = () => {
-    const total = calcularTotal(pedidos);
-    const nuevasMesas = {
+  const guardarEnMesa = () => {
+    setMesas({
       ...mesas,
       [mesaKey]: {
         pedidos,
-        total,
+        total: totalPedidos(pedidos),
         mesero: user.name,
         fechaCreacion: mesaData.fechaCreacion || new Date().toISOString(),
         fechaActualizacion: new Date().toISOString()
       }
-    };
-    setMesas(nuevasMesas);
+    });
+  };
+
+  const guardarPedido = () => {
+    guardarEnMesa();
     onCerrar();
   };
 
-  const manejarPicada = () => {
-    if (!picadaConfig.size || picadaConfig.carnes.length === 0 || !picadaConfig.termino || !picadaConfig.precio) {
-      alert('Complete todos los campos de la picada');
-      return;
-    }
-    agregarPedido({
-      tipo: 'picada',
-      size: picadaConfig.size,
-      carnes: picadaConfig.carnes,
-      termino: picadaConfig.termino,
-      precio: picadaConfig.precio
-    });
-  };
-
-  const manejarGallina = () => {
-    if (!productoSeleccionado || !terminoSeleccionado) {
-      alert('Seleccione producto y término');
-      return;
-    }
-    agregarPedido({
-      tipo: 'gallina',
-      nombre: productoSeleccionado.name,
-      termino: terminoSeleccionado,
-      precioItem: productoSeleccionado.price
-    });
-  };
-
-  const manejarSopa = () => {
-    if (!saborSeleccionado) {
-      alert('Seleccione un sabor');
-      return;
-    }
-    agregarPedido({
-      tipo: 'sopa',
-      nombre: saborSeleccionado,
-      precioItem: precioSopas
-    });
-  };
-
-  const manejarBebida = () => {
-    if (!bebidaSeleccionada) {
-      alert('Seleccione una bebida');
-      return;
-    }
-    const bebida = MENU_DATA.bebidas[categoriaBebidasActual].find(b => b.name === bebidaSeleccionada);
-    agregarPedido({
-      tipo: 'bebida',
-      nombre: bebidaSeleccionada,
-      categoria: categoriaBebidasActual,
-      precioItem: bebida.price
-    });
-  };
-
-  const manejarAdicional = () => {
-    if (!adicionalSeleccionado) {
-      alert('Seleccione un adicional');
-      return;
-    }
-    const adicional = MENU_DATA.adicionales.find(a => a.name === adicionalSeleccionado);
-    agregarPedido({
-      tipo: 'adicional',
-      nombre: adicionalSeleccionado,
-      precioItem: adicional.price
-    });
-  };
-
-  const toggleCarne = (carne) => {
-    const nuevasCarnes = picadaConfig.carnes.includes(carne)
-      ? picadaConfig.carnes.filter(c => c !== carne)
-      : [...picadaConfig.carnes, carne];
-    setPicadaConfig({ ...picadaConfig, carnes: nuevasCarnes });
-  };
-
-  const categorias = [
-    { id: 'picadas', nombre: 'Picadas', icono: '🥩', color: 'from-red-500 to-red-600' },
-    { id: 'gallina', nombre: 'Gallina', icono: '🐔', color: 'from-yellow-500 to-orange-500' },
-    { id: 'sopas', nombre: 'Sopas', icono: '🍲', color: 'from-green-500 to-green-600' },
-    { id: 'bebidas', nombre: 'Bebidas', icono: '🥤', color: 'from-blue-500 to-blue-600' },
-    { id: 'adicionales', nombre: 'Adicionales', icono: '🍟', color: 'from-purple-500 to-purple-600' }
-  ];
+  const indiceColor = (categoria: Categoria) => categorias.findIndex(c => c.id === categoria.id) % COLORES.length;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
@@ -196,7 +163,7 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
               </div>
               <div>
                 <CardTitle className="text-white text-base sm:text-xl">Mesa {mesaSeleccionada}</CardTitle>
-                <p className="text-red-300 text-xs sm:text-sm">Piso {pisoActual} • {user.name}</p>
+                <p className="text-red-300 text-xs sm:text-sm">{zona.nombre} • {user.name}</p>
               </div>
             </div>
             <Button
@@ -214,251 +181,132 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
           <div className="flex flex-col lg:grid lg:grid-cols-3 min-h-[calc(100vh-60px)] sm:min-h-0 sm:h-[calc(95vh-120px)]">
             {/* Panel de Categorías */}
             <div className="lg:col-span-2 p-3 sm:p-6 overflow-y-auto flex-1 lg:border-r border-red-500/20">
+              {categorias.length === 0 ? (
+                <div className="text-center py-12">
+                  <UtensilsCrossed className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-300">El menú está vacío.</p>
+                  <p className="text-gray-400 text-sm">El dueño o la cajera pueden agregar productos desde su panel, en la sección Menú.</p>
+                </div>
+              ) : (
+              <>
               {/* Selector de Categorías */}
-              <div className="grid grid-cols-5 gap-1.5 sm:gap-3 mb-4 sm:mb-6">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-3 mb-4 sm:mb-6">
                 {categorias.map((categoria) => (
                   <Button
                     key={categoria.id}
-                    onClick={() => setCategoriaActual(categoria.id)}
+                    onClick={() => { setCategoriaId(categoria.id); setConfigurando(null); }}
                     className={`h-14 sm:h-20 flex flex-col items-center justify-center space-y-0.5 sm:space-y-1 transition-all duration-300 transform hover:scale-105 ${
-                      categoriaActual === categoria.id
-                        ? `bg-gradient-to-br ${categoria.color} text-white shadow-lg`
+                      categoriaActual?.id === categoria.id
+                        ? `bg-gradient-to-br ${COLORES[indiceColor(categoria)]} text-white shadow-lg`
                         : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-red-500/20'
                     }`}
                   >
                     <span className="text-xl sm:text-2xl">{categoria.icono}</span>
-                    <span className="text-[10px] sm:text-xs font-medium">{categoria.nombre}</span>
+                    <span className="text-[10px] sm:text-xs font-medium truncate max-w-full">{categoria.nombre}</span>
                   </Button>
                 ))}
               </div>
 
-              {/* Contenido por Categoría */}
-              <div className="space-y-3 sm:space-y-6">
-                {categoriaActual === 'picadas' && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                      <span className="text-xl sm:text-2xl mr-2">🥩</span> Configurar Picada
+              {/* Productos de la categoría */}
+              {categoriaActual && !configurando && (
+                <div className="space-y-3 sm:space-y-4">
+                  <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
+                    <span className="text-xl sm:text-2xl mr-2">{categoriaActual.icono}</span> {categoriaActual.nombre}
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                    {categoriaActual.productos.map((producto) => (
+                      <Button
+                        key={producto.id}
+                        disabled={!producto.disponible}
+                        onClick={() => elegirProducto(producto, categoriaActual)}
+                        className={`h-12 sm:h-14 flex justify-between items-center p-3 sm:p-4 text-left bg-white/5 border border-red-500/30 text-gray-300 hover:bg-white/15 hover:text-white transition-all duration-200 text-xs sm:text-sm disabled:opacity-40`}
+                      >
+                        <span className="font-medium truncate">{producto.nombre}</span>
+                        <span className="text-green-400 font-bold ml-2 shrink-0">
+                          {!producto.disponible ? 'Agotado' : producto.precio_libre ? 'Precio libre' : `$${producto.precio.toLocaleString()}`}
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Configurar producto con opciones */}
+              {configurando && (
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base sm:text-lg font-semibold text-white flex items-center">
+                      <span className="text-xl sm:text-2xl mr-2">{categoriaActual?.icono}</span> {configurando.nombre}
                     </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Tamaño</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {MENU_DATA.picadas.sizes.map((size) => (
+                    <Button
+                      onClick={() => setConfigurando(null)}
+                      variant="outline"
+                      size="sm"
+                      className="bg-transparent border-red-500/50 text-gray-300 hover:bg-white/10"
+                    >
+                      Volver
+                    </Button>
+                  </div>
+
+                  {configurando.opciones.map((opcion) => (
+                    <div key={opcion.nombre}>
+                      <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">
+                        {opcion.nombre}{opcion.varias ? ' (puede elegir varias)' : ''}
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {opcion.valores.map((valor) => {
+                          const v = elegidas[opcion.nombre];
+                          const activo = Array.isArray(v) ? v.includes(valor) : v === valor;
+                          return (
                             <Button
-                              key={size}
-                              onClick={() => setPicadaConfig({...picadaConfig, size})}
-                              variant={picadaConfig.size === size ? "default" : "outline"}
+                              key={valor}
+                              onClick={() => elegirValor(opcion, valor)}
                               className={`h-10 sm:h-12 text-xs sm:text-sm ${
-                                picadaConfig.size === size 
-                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' 
-                                  : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
+                                activo
+                                  ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
+                                  : 'bg-white/5 border border-red-500/30 text-gray-300 hover:bg-white/10'
                               }`}
                             >
-                              {size}
+                              {valor}
                             </Button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Término</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {MENU_DATA.picadas.terminos.map((termino) => (
-                            <Button
-                              key={termino}
-                              onClick={() => setPicadaConfig({...picadaConfig, termino})}
-                              variant={picadaConfig.termino === termino ? "default" : "outline"}
-                              className={`h-10 sm:h-12 text-[10px] sm:text-xs ${
-                                picadaConfig.termino === termino 
-                                  ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white' 
-                                  : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
-                              }`}
-                            >
-                              {termino}
-                            </Button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
+                  ))}
 
-                    <div>
-                      <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2 sm:mb-3">Carnes (Seleccione múltiples)</label>
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                        {MENU_DATA.picadas.carnes.map((carne) => (
-                          <Button
-                            key={carne}
-                            onClick={() => toggleCarne(carne)}
-                            className={`h-10 sm:h-12 text-xs sm:text-sm transition-all duration-200 ${
-                              picadaConfig.carnes.includes(carne)
-                                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
-                                : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
-                            }`}
-                          >
-                            {carne}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    {configurando.precio_libre ? (
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-red-300 mb-2">Precio</label>
                         <Input
                           type="text"
-                          value={picadaConfig.precio ? parseInt(picadaConfig.precio).toLocaleString() : ''}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^0-9]/g, '');
-                            setPicadaConfig({...picadaConfig, precio: value});
-                          }}
+                          inputMode="numeric"
+                          value={precioLibre ? parseInt(precioLibre).toLocaleString() : ''}
+                          onChange={(e) => setPrecioLibre(e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="Ej: 25.000"
                           className="bg-white/5 border-red-500/30 text-white h-10 sm:h-12 text-sm"
                         />
                       </div>
+                    ) : (
                       <div className="flex items-end">
-                        <Button
-                          onClick={manejarPicada}
-                          className="w-full h-10 sm:h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium text-sm"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Agregar
-                        </Button>
+                        <p className="text-green-400 font-bold text-lg">${configurando.precio.toLocaleString()}</p>
                       </div>
+                    )}
+                    <div className="flex items-end">
+                      <Button
+                        onClick={agregarConfigurado}
+                        className="w-full h-10 sm:h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium text-sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Agregar
+                      </Button>
                     </div>
                   </div>
-                )}
-
-                {categoriaActual === 'gallina' && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                      <span className="text-xl sm:text-2xl mr-2">🐔</span> Productos de Gallina
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-                      {MENU_DATA.gallina.productos.map((producto) => (
-                        <Button
-                          key={producto.name}
-                          onClick={() => {
-                            agregarPedido({
-                              tipo: 'gallina',
-                              nombre: producto.name,
-                              termino: 'Jugoso',
-                              precioItem: producto.price
-                            });
-                          }}
-                          className="h-12 sm:h-16 flex justify-between items-center p-3 sm:p-4 text-left bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-yellow-500 hover:to-orange-500 hover:text-white transition-all duration-200 text-xs sm:text-sm"
-                        >
-                          <span className="font-medium">{producto.name}</span>
-                          <span className="text-green-400 font-bold">${producto.price.toLocaleString()}</span>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {categoriaActual === 'sopas' && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                      <span className="text-xl sm:text-2xl mr-2">🍲</span> Sopas - ${precioSopas.toLocaleString()}
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                      {saboresSopas.map((sabor) => (
-                        <Button
-                          key={sabor}
-                          onClick={() => {
-                            agregarPedido({
-                              tipo: 'sopa',
-                              nombre: sabor,
-                              precioItem: precioSopas
-                            });
-                          }}
-                          className="h-12 sm:h-14 text-left p-3 sm:p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-green-500 hover:to-green-600 hover:text-white transition-all duration-200 text-xs sm:text-sm"
-                        >
-                          {sabor}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {categoriaActual === 'bebidas' && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                      <span className="text-xl sm:text-2xl mr-2">🥤</span> Bebidas
-                    </h3>
-                    
-                    <div className="space-y-3 sm:space-y-4">
-                      {Object.keys(MENU_DATA.bebidas).map((categoria) => (
-                        <div key={categoria}>
-                          <Button
-                            onClick={() => {
-                              setCategoriaBebidasActual(categoria === categoriaBebidasActual ? '' : categoria);
-                              setBebidaSeleccionada('');
-                            }}
-                            className={`w-full h-10 sm:h-12 mb-2 sm:mb-3 text-left text-xs sm:text-sm ${
-                              categoriaBebidasActual === categoria
-                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                                : 'bg-white/5 border-red-500/30 text-gray-300 hover:bg-white/10'
-                            }`}
-                          >
-                            {categoria}
-                          </Button>
-                          
-                          {categoriaBebidasActual === categoria && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ml-2 sm:ml-4">
-                              {MENU_DATA.bebidas[categoria].map((bebida) => (
-                                <Button
-                                  key={bebida.name}
-                                  onClick={() => {
-                                    agregarPedido({
-                                      tipo: 'bebida',
-                                      nombre: bebida.name,
-                                      categoria: categoria,
-                                      precioItem: bebida.price
-                                    });
-                                  }}
-                                  className="h-10 sm:h-12 flex justify-between items-center p-2 sm:p-3 text-xs sm:text-sm bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-cyan-500 hover:to-blue-500 hover:text-white transition-all duration-200"
-                                >
-                                  <span>{bebida.name}</span>
-                                  <span className="text-green-400 font-bold">${bebida.price.toLocaleString()}</span>
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {categoriaActual === 'adicionales' && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                      <span className="text-xl sm:text-2xl mr-2">🍟</span> Adicionales
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                      {MENU_DATA.adicionales.map((adicional) => (
-                        <Button
-                          key={adicional.name}
-                          onClick={() => {
-                            agregarPedido({
-                              tipo: 'adicional',
-                              nombre: adicional.name,
-                              precioItem: adicional.price
-                            });
-                          }}
-                          className="h-12 sm:h-14 flex justify-between items-center p-3 sm:p-4 bg-white/5 border-red-500/30 text-gray-300 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-600 hover:text-white transition-all duration-200 text-xs sm:text-sm"
-                        >
-                          <span>{adicional.name}</span>
-                          <span className="text-green-400 font-bold">${adicional.price.toLocaleString()}</span>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+              </>
+              )}
             </div>
 
             {/* Panel de Pedido */}
@@ -482,19 +330,9 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
                       <div key={pedido.id} className="bg-white/5 rounded-lg p-2 sm:p-3 border border-red-500/20">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
-                            <p className="text-white font-medium text-sm">
-                              {pedido.tipo === 'picada' 
-                                ? `Picada ${pedido.size}` 
-                                : pedido.nombre
-                              }
-                            </p>
-                            {pedido.tipo === 'picada' && (
-                              <p className="text-gray-400 text-xs">
-                                {pedido.carnes?.join(', ')} • {pedido.termino}
-                              </p>
-                            )}
-                            {pedido.termino && pedido.tipo !== 'picada' && (
-                              <p className="text-gray-400 text-xs">Término: {pedido.termino}</p>
+                            <p className="text-white font-medium text-sm">{nombreItem(pedido)}</p>
+                            {detalleItem(pedido) && (
+                              <p className="text-gray-400 text-xs">{detalleItem(pedido)}</p>
                             )}
                           </div>
                           
@@ -534,7 +372,7 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
                           </div>
                           
                           <p className="text-green-400 font-bold text-sm">
-                            ${((pedido.tipo === 'picada' ? parseInt(pedido.precio) : pedido.precioItem) * pedido.cantidad).toLocaleString()}
+                            ${subtotal(pedido).toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -548,7 +386,7 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
                   <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">
                     <span className="text-base sm:text-lg font-semibold text-white">Total:</span>
                     <span className="text-xl sm:text-2xl font-bold text-green-400">
-                      ${calcularTotal(pedidos).toLocaleString()}
+                      ${totalPedidos(pedidos).toLocaleString()}
                     </span>
                   </div>
 
@@ -564,18 +402,7 @@ export default function ModalPedido({ pisoActual, mesaSeleccionada, mesas, setMe
                     {pedidos.length > 0 && (
                       <Button
                         onClick={() => {
-                          const total = calcularTotal(pedidos);
-                          const nuevasMesas = {
-                            ...mesas,
-                            [mesaKey]: {
-                              pedidos,
-                              total,
-                              mesero: user.name,
-                              fechaCreacion: mesaData.fechaCreacion || new Date().toISOString(),
-                              fechaActualizacion: new Date().toISOString()
-                            }
-                          };
-                          setMesas(nuevasMesas);
+                          guardarEnMesa();
                           onAbrirCobro();
                         }}
                         className="h-10 sm:h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium text-sm sm:text-base"
