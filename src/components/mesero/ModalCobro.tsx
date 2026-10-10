@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X, CheckCircle, Calculator, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,11 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
   const [tipoTransferencia, setTipoTransferencia] = useState('');
   const [montoPagado, setMontoPagado] = useState('');
   const [notaAdicional, setNotaAdicional] = useState('');
+  // Mientras se guarda el cobro, los botones quedan bloqueados para que un doble toque no lo repita
+  const [procesando, setProcesando] = useState(false);
+  const enviando = useRef(false);
+  // Número de la venta, fijo para este cobro: si se reintenta, la venta no se guarda dos veces
+  const idVenta = useRef(Date.now());
 
   const total = mesaData?.total || 0;
   const cambio = montoPagado ? Math.max(0, parseInt(montoPagado.replace(/[^0-9]/g, '')) - total) : 0;
@@ -22,7 +27,8 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
     { id: 'transferencia', nombre: 'Transferencia', icono: Smartphone, color: 'from-purple-500 to-purple-600' }
   ];
 
-  const handleProcesarCobro = () => {
+  const handleProcesarCobro = async () => {
+    if (enviando.current) return;
     if (metodoPago === 'efectivo' && !montoPagado) {
       alert('Ingrese el monto pagado');
       return;
@@ -40,6 +46,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
 
     const datosVenta = {
       ...mesaData,
+      idVenta: idVenta.current,
       metodoPago: metodoPago === 'transferencia' ? `${metodoPago} - ${tipoTransferencia}` : metodoPago,
       montoPagado: metodoPago === 'efectivo' ? parseInt(montoPagado.replace(/[^0-9]/g, '')) : total,
       cambio: metodoPago === 'efectivo' ? cambio : 0,
@@ -47,7 +54,14 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
       total
     };
 
-    onProcesarCobro(datosVenta);
+    enviando.current = true;
+    setProcesando(true);
+    try {
+      await onProcesarCobro(datosVenta);
+    } finally {
+      enviando.current = false;
+      setProcesando(false);
+    }
   };
 
   return (
@@ -64,7 +78,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
                 <p className="text-cyan-300 text-sm">Mesa {mesaSeleccionada} • {zonaNombre}</p>
               </div>
             </div>
-            <Button onClick={onCerrar} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
+            <Button onClick={onCerrar} disabled={procesando} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -143,7 +157,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
             {metodoPago === 'efectivo' && (
               <div>
                 <label className="block text-sm font-medium text-cyan-300 mb-2">Monto Recibido</label>
-                <Input type="text" value={montoPagado ? parseInt(montoPagado.replace(/[^0-9]/g, '')).toLocaleString() : ''}
+                <Input type="text" inputMode="numeric" value={montoPagado ? parseInt(montoPagado.replace(/[^0-9]/g, '')).toLocaleString() : ''}
                   onChange={(e) => setMontoPagado(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ingrese el monto recibido" className="bg-white/5 border-cyan-400/20 text-white text-xl h-14 font-semibold" />
                 {montoPagado && cambio >= 0 && (
@@ -164,9 +178,9 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-4">
-              <Button onClick={onCerrar} variant="outline" className="h-14 border-gray-600 text-gray-400 hover:bg-gray-600 hover:text-white">Cancelar</Button>
-              <Button onClick={handleProcesarCobro} className="h-14 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold text-lg shadow-lg shadow-green-500/30">
-                <CheckCircle className="w-5 h-5 mr-2" />Confirmar Cobro
+              <Button onClick={onCerrar} disabled={procesando} variant="outline" className="h-14 border-gray-600 text-gray-400 hover:bg-gray-600 hover:text-white">Cancelar</Button>
+              <Button onClick={handleProcesarCobro} disabled={procesando} className="h-14 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold text-lg shadow-lg shadow-green-500/30">
+                <CheckCircle className="w-5 h-5 mr-2" />{procesando ? 'Procesando…' : 'Confirmar Cobro'}
               </Button>
             </div>
           </div>

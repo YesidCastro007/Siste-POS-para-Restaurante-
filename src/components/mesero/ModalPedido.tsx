@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,10 +22,11 @@ const COLORES = [
 
 type Elegidas = Record<string, string | string[]>;
 
-interface Mesa {
+export interface Mesa {
   pedidos: ItemPedido[];
   total: number;
   mesero: string;
+  meseroId?: string;
   fechaCreacion?: string;
   fechaActualizacion?: string;
 }
@@ -33,19 +34,32 @@ interface Mesa {
 // Producto que necesita que el mesero escoja algo antes de agregarlo
 const necesitaConfigurar = (p: Producto) => p.precio_libre || p.opciones.length > 0;
 
-export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, menu }: {
+export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa, onCerrar, onAbrirCobro, user, menu }: {
   zona: { numero: number; nombre: string };
   mesaSeleccionada: number;
   mesas: Record<string, Mesa>;
-  setMesas: (mesas: Record<string, Mesa>) => void;
+  guardarMesa: (mesaKey: string, mesa: Mesa) => Promise<boolean>;
   onCerrar: () => void;
   onAbrirCobro: () => void;
-  user: { name: string };
+  user: { id?: string; name: string };
   menu: Categoria[];
 }) {
   const mesaKey = `${zona.numero}-${mesaSeleccionada}`;
-  const mesaData = mesas[mesaKey] || { pedidos: [], total: 0, mesero: user.name };
-  const [pedidos, setPedidos] = useState<ItemPedido[]>(mesaData.pedidos || []);
+  // Pedido de la mesa tal como está guardado (se actualiza cuando otro dispositivo lo cambia)
+  const pedidosGuardados = JSON.stringify(mesas[mesaKey]?.pedidos || []);
+  const [pedidos, setPedidos] = useState<ItemPedido[]>(() => JSON.parse(pedidosGuardados));
+  // Pedido guardado en el momento en que se empezó a editar
+  const [base, setBase] = useState(pedidosGuardados);
+  const hayCambios = JSON.stringify(pedidos) !== base;
+  const [guardando, setGuardando] = useState(false);
+
+  // Mientras el mesero no haya cambiado nada, se muestra lo último que hay guardado en la mesa
+  useEffect(() => {
+    if (hayCambios || pedidosGuardados === base) return;
+    setPedidos(JSON.parse(pedidosGuardados));
+    setBase(pedidosGuardados);
+  }, [hayCambios, pedidosGuardados, base]);
+
   // Se muestran todas las categorías, también las nuevas que aún no tienen productos
   const categorias = menu;
   const [categoriaId, setCategoriaId] = useState<number | null>(categorias[0]?.id ?? null);
@@ -131,21 +145,51 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
     setPedidos(pedidos.map(p => p.id === id ? { ...p, cantidad: nuevaCantidad } : p));
   };
 
-  const guardarEnMesa = () => {
-    setMesas({
-      ...mesas,
-      [mesaKey]: {
-        pedidos,
-        total: totalPedidos(pedidos),
-        mesero: user.name,
-        fechaCreacion: mesaData.fechaCreacion || new Date().toISOString(),
-        fechaActualizacion: new Date().toISOString()
+  // Guarda el pedido en la mesa. Devuelve true si quedó guardado (o si no había nada que guardar).
+  const guardarEnMesa = async () => {
+    if (guardando) return false;
+    const actual = mesas[mesaKey];
+    if (!hayCambios || (pedidos.length === 0 && !actual)) return true;
+
+    // Otro dispositivo cambió la mesa mientras este pedido estaba abierto
+    if (JSON.stringify(actual?.pedidos || []) !== base) {
+      const reemplazar = confirm(actual
+        ? 'Mientras usted editaba, otro dispositivo cambió el pedido de esta mesa.\n\nAceptar: guardar su versión (reemplaza la otra).\nCancelar: ver el pedido actualizado.'
+        : 'Mientras usted editaba, esta mesa se cobró o se liberó en otro dispositivo.\n\nAceptar: guardar este pedido como un pedido nuevo.\nCancelar: descartarlo.');
+      if (!reemplazar) {
+        setPedidos(actual?.pedidos || []);
+        setBase(JSON.stringify(actual?.pedidos || []));
+        return false;
       }
+    }
+
+    if (pedidos.length === 0 && !confirm('¿Dejar esta mesa sin productos? Quedará libre.')) return false;
+
+    setGuardando(true);
+    const guardado = await guardarMesa(mesaKey, {
+      pedidos,
+      total: totalPedidos(pedidos),
+      // La mesa sigue siendo del mesero que la abrió, aunque otro le agregue productos
+      mesero: actual?.mesero || user.name,
+      meseroId: actual ? actual.meseroId : user.id,
+      fechaCreacion: actual?.fechaCreacion || new Date().toISOString(),
+      fechaActualizacion: new Date().toISOString()
     });
+    setGuardando(false);
+    if (guardado) setBase(JSON.stringify(pedidos));
+    return guardado;
   };
 
-  const guardarPedido = () => {
-    guardarEnMesa();
+  const guardarPedido = async () => {
+    if (await guardarEnMesa()) onCerrar();
+  };
+
+  const guardarYCobrar = async () => {
+    if (await guardarEnMesa()) onAbrirCobro();
+  };
+
+  const cerrar = () => {
+    if (hayCambios && !confirm('Hay cambios sin guardar en este pedido. ¿Salir sin guardarlos?')) return;
     onCerrar();
   };
 
@@ -168,7 +212,8 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
               </div>
             </div>
             <Button
-              onClick={onCerrar}
+              onClick={cerrar}
+              disabled={guardando}
               variant="outline"
               size="sm"
               className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-200"
@@ -399,18 +444,17 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   <div className="grid grid-cols-1 gap-2 sm:gap-3">
                     <Button
                       onClick={guardarPedido}
+                      disabled={guardando}
                       className="h-10 sm:h-12 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium text-sm sm:text-base"
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
-                      Guardar Pedido
+                      {guardando ? 'Guardando…' : 'Guardar Pedido'}
                     </Button>
                     
                     {pedidos.length > 0 && (
                       <Button
-                        onClick={() => {
-                          guardarEnMesa();
-                          onAbrirCobro();
-                        }}
+                        onClick={guardarYCobrar}
+                        disabled={guardando}
                         className="h-10 sm:h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium text-sm sm:text-base"
                       >
                         <Send className="w-4 h-4 mr-2" />

@@ -1,74 +1,116 @@
 import React, { useState } from 'react';
-import { LogOut, UtensilsCrossed } from 'lucide-react';
+import { LogOut, UtensilsCrossed, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarcaEncabezado } from '@/components/marca/Marca';
 import { useNombreNegocio } from '@/hooks/useNombreNegocio';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMenu, cargarZonas, ZONAS_POR_DEFECTO, type Categoria, type Zona } from '@/lib/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
-import { cargarMesas, guardarCambiosMesas, liberarMesa, registrarVenta, mantenerActualizado } from '@/lib/datos';
-import ModalPedido from './ModalPedido';
+import { cargarMesas, guardarCambiosMesas, liberarMesa, liberarMesaCobrada, registrarVenta, leerConfig, mantenerActualizado } from '@/lib/datos';
+import ModalPedido, { type Mesa } from './ModalPedido';
 import ModalCobro from './ModalCobro';
 
 export default function MeseroDashboard({ user, onLogout }) {
   const negocio = useNombreNegocio();
   const [zonaActual, setZonaActual] = useState(1);
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
-  const [mesas, setMesas] = useState({});
+  const [mesas, setMesas] = useState<Record<string, Mesa>>({});
   const [mostrarPedido, setMostrarPedido] = useState(false);
   const [mostrarCobro, setMostrarCobro] = useState(false);
   const [menu, setMenu] = useState<Categoria[]>([]);
   const [zonas, setZonas] = useState<Zona[]>(ZONAS_POR_DEFECTO);
+  // Hasta que lleguen las mesas de Supabase no se puede abrir ninguna,
+  // para no guardar encima de un pedido que todavía no se ve
+  const [estadoCarga, setEstadoCarga] = useState<'cargando' | 'listo' | 'error'>('cargando');
+  const [errorCarga, setErrorCarga] = useState('');
+  const [sinConexion, setSinConexion] = useState(false);
 
-  const mesasRef = React.useRef({});
+  const mesasRef = React.useRef<Record<string, Mesa>>({});
   const escriturasPendientes = React.useRef(0);
-  const colaEscrituras = React.useRef(Promise.resolve());
+  const colaEscrituras = React.useRef<Promise<unknown>>(Promise.resolve());
   const numeroCarga = React.useRef(0);
+  // Mesas ya cobradas que no se pudieron liberar (por ejemplo, sin internet): se reintenta en cada carga.
+  // Guarda la fecha de creación del pedido cobrado, para no borrar un pedido nuevo de esa mesa.
+  const porLiberar = React.useRef(new Map<string, string | undefined>());
+
+  const liberarPendientes = async () => {
+    for (const [mesaKey, fechaCreacion] of [...porLiberar.current]) {
+      await liberarMesaCobrada(mesaKey, fechaCreacion);
+      porLiberar.current.delete(mesaKey);
+    }
+  };
 
   // Mesas, menú y zonas se guardan en Supabase y se comparten entre dispositivos
   const cargarDatos = React.useCallback(async () => {
     const carga = ++numeroCarga.current;
     try {
+      if (porLiberar.current.size > 0) await liberarPendientes().catch(() => {});
       const [mesasGuardadas, menuGuardado, zonasGuardadas] = await Promise.all([
-        cargarMesas(),
+        cargarMesas() as Promise<Record<string, Mesa>>,
         cargarMenu(),
         cargarZonas()
       ]);
       // Se descarta si llegó una carga más nueva o si hay un guardado en curso
       if (carga !== numeroCarga.current || escriturasPendientes.current > 0) return;
+      // Una mesa ya cobrada que falta liberar no se muestra como ocupada
+      porLiberar.current.forEach((fechaCreacion, mesaKey) => {
+        if (mesasGuardadas[mesaKey]?.fechaCreacion === fechaCreacion) delete mesasGuardadas[mesaKey];
+      });
       mesasRef.current = mesasGuardadas;
       setMesas(mesasGuardadas);
       setMenu(menuGuardado);
       setZonas(zonasGuardadas);
+      setEstadoCarga('listo');
+      setSinConexion(false);
     } catch (error) {
       console.error('Error cargando datos:', error.message);
+      if (carga !== numeroCarga.current) return;
+      setErrorCarga(error.message);
+      setEstadoCarga(estado => (estado === 'listo' ? 'listo' : 'error'));
+      setSinConexion(true);
     }
   }, []);
 
-  // Cambia las mesas en pantalla de inmediato y luego guarda en Supabase.
+  // Cambia las mesas en pantalla de inmediato y luego guarda en Supabase. Devuelve si se guardó.
   // Los guardados van en fila, para que por ejemplo "liberar mesa" no llegue antes que el último pedido.
-  const guardarEnSupabase = (nuevasMesas, guardar) => {
+  const guardarEnSupabase = (nuevasMesas: Record<string, Mesa>, guardar: () => Promise<unknown>) => {
     escriturasPendientes.current++;
     numeroCarga.current++;
     mesasRef.current = nuevasMesas;
     setMesas(nuevasMesas);
-    colaEscrituras.current = colaEscrituras.current.then(async () => {
+    const resultado = colaEscrituras.current.then(async () => {
       try {
         await guardar();
+        return true;
       } catch (error) {
         console.error('Error guardando mesas:', error.message);
-        alert('⚠️ No se pudo guardar la mesa. Revise la conexión a internet.');
+        return false;
       } finally {
         escriturasPendientes.current--;
         if (escriturasPendientes.current === 0) cargarDatos();
       }
     });
-    return colaEscrituras.current;
+    colaEscrituras.current = resultado;
+    return resultado;
   };
 
-  const guardarMesas = (nuevasMesas) => {
+  // Guarda el pedido de una sola mesa. Si no se pudo, la pantalla vuelve a lo que había
+  // y el pedido sigue abierto para intentarlo de nuevo.
+  const guardarMesa = async (mesaKey: string, mesa: Mesa) => {
     const anteriores = mesasRef.current;
-    return guardarEnSupabase(nuevasMesas, () => guardarCambiosMesas(anteriores, nuevasMesas));
+    const nuevas = { ...anteriores, [mesaKey]: mesa };
+    const guardado = await guardarEnSupabase(nuevas, () => guardarCambiosMesas(anteriores, nuevas));
+    if (!guardado) {
+      if (mesasRef.current[mesaKey] === mesa) {
+        const revertidas = { ...mesasRef.current };
+        if (anteriores[mesaKey]) revertidas[mesaKey] = anteriores[mesaKey];
+        else delete revertidas[mesaKey];
+        mesasRef.current = revertidas;
+        setMesas(revertidas);
+      }
+      alert('⚠️ No se pudo guardar el pedido. Revise la conexión a internet e intente de nuevo.');
+    }
+    return guardado;
   };
 
   React.useEffect(() => mantenerActualizado(['mesas', 'config', 'categorias', 'productos'], cargarDatos), [cargarDatos]);
@@ -91,37 +133,76 @@ export default function MeseroDashboard({ user, onLogout }) {
   }, [zonaExiste, zonas, mesaSeleccionada]);
 
   React.useEffect(() => {
+    if (estadoCarga !== 'listo') return;
     if (zonaExiste && mesaSeleccionada !== null && mesaSeleccionada > zona.mesas) {
       setMostrarPedido(false);
       setMostrarCobro(false);
       setMesaSeleccionada(null);
       alert('Esta mesa ya no existe en la zona. Elija otra mesa.');
     }
-  }, [zonaExiste, zona.mesas, mesaSeleccionada]);
+  }, [estadoCarga, zonaExiste, zona.mesas, mesaSeleccionada]);
+
+  // Mesa atendida por este mesero (las mesas guardadas antes no tienen meseroId: se compara el nombre)
+  const esDeEsteMesero = (mesa?: Mesa) =>
+    !!mesa && (mesa.meseroId ? mesa.meseroId === user.id : mesa.mesero === user.name);
+  const miColor = getMeseroColorConfig(user.name);
 
   const abrirMesa = (numeroMesa) => {
     setMesaSeleccionada(numeroMesa);
     setMostrarPedido(true);
   };
 
-  const cerrarPedido = () => {
+  const cerrarModales = () => {
+    setMostrarCobro(false);
     setMostrarPedido(false);
     setMesaSeleccionada(null);
   };
 
-  const procesarCobro = async (mesaKey, mesaData) => {
-    // Crear registro de venta
+  const procesarCobro = async (mesaKey: string, datosCobro) => {
+    // Antes de cobrar se espera a que terminen los guardados y se revisa la mesa en Supabase,
+    // por si otro dispositivo ya la cobró o cambió el pedido
+    await colaEscrituras.current;
+    let mesaActual: Mesa | undefined;
+    let estadoCaja: { abierta?: boolean } | null;
+    try {
+      const [mesasGuardadas, caja] = await Promise.all([
+        cargarMesas() as Promise<Record<string, Mesa>>,
+        leerConfig<{ abierta?: boolean } | null>('caja_estado', null)
+      ]);
+      mesaActual = mesasGuardadas[mesaKey];
+      estadoCaja = caja;
+    } catch (error) {
+      console.error('Error revisando la mesa antes de cobrar:', error.message);
+      alert('⚠️ No se pudo registrar la venta. Revise la conexión a internet e intente de nuevo.');
+      return;
+    }
+    if (!mesaActual?.pedidos?.length) {
+      cerrarModales();
+      cargarDatos();
+      alert('Esta mesa ya fue cobrada o liberada desde otro dispositivo.');
+      return;
+    }
+    if (JSON.stringify(mesaActual.pedidos) !== JSON.stringify(datosCobro.pedidos)) {
+      cerrarModales();
+      cargarDatos();
+      alert('El pedido de esta mesa cambió en otro dispositivo. Ábrala de nuevo y revise el pedido antes de cobrar.');
+      return;
+    }
+
     const venta = {
-      id: Date.now(),
+      id: datosCobro.idVenta ?? Date.now(),
       fecha: new Date().toISOString(),
       mesa: mesaKey,
-      mesero: user.name,
-      pedidos: mesaData.pedidos,
-      total: mesaData.total,
-      metodoPago: mesaData.metodoPago || 'efectivo'
+      // La venta es del mesero que atendió la mesa
+      mesero: mesaActual.mesero || user.name,
+      pedidos: mesaActual.pedidos,
+      total: mesaActual.total,
+      metodoPago: datosCobro.metodoPago || 'efectivo',
+      montoPagado: datosCobro.montoPagado,
+      cambio: datosCobro.cambio,
+      notaAdicional: datosCobro.notaAdicional
     };
 
-    // Guardar la venta
     try {
       await registrarVenta(venta);
     } catch (error) {
@@ -130,17 +211,20 @@ export default function MeseroDashboard({ user, onLogout }) {
       return;
     }
 
-    // Liberar la mesa
+    // Liberar la mesa. Si falla, se reintenta en las siguientes cargas y la mesa no se muestra ocupada.
+    porLiberar.current.set(mesaKey, mesaActual.fechaCreacion);
     const nuevasMesas = { ...mesasRef.current };
     delete nuevasMesas[mesaKey];
-    guardarEnSupabase(nuevasMesas, () => liberarMesa(mesaKey));
+    await guardarEnSupabase(nuevasMesas, async () => {
+      await liberarMesa(mesaKey);
+      porLiberar.current.delete(mesaKey);
+    });
 
-    // Cerrar modales
-    setMostrarCobro(false);
-    setMostrarPedido(false);
-    setMesaSeleccionada(null);
-
-    alert(`¡Cobro procesado exitosamente! Total: $${mesaData.total.toLocaleString()}`);
+    cerrarModales();
+    const avisoCaja = estadoCaja && !estadoCaja.abierta
+      ? '\n\nOjo: la caja está cerrada. Avise a la cajera para que esta venta quede en el próximo turno.'
+      : '';
+    alert(`¡Cobro procesado exitosamente! Total: $${venta.total.toLocaleString()}${avisoCaja}`);
   };
 
   const abrirCobro = () => {
@@ -175,6 +259,30 @@ export default function MeseroDashboard({ user, onLogout }) {
       </div>
 
       <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-3 sm:space-y-6">
+        {sinConexion && estadoCarga === 'listo' && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs sm:text-sm text-amber-200">
+            <WifiOff className="w-4 h-4 shrink-0" />
+            Sin conexión con el servidor: las mesas pueden no estar al día. Revise el internet.
+          </div>
+        )}
+
+        {estadoCarga !== 'listo' ? (
+          <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
+            <CardContent className="p-8 text-center space-y-3">
+              {estadoCarga === 'cargando' ? (
+                <p className="text-gray-300">Cargando mesas…</p>
+              ) : (
+                <>
+                  <WifiOff className="w-10 h-10 text-amber-300 mx-auto" />
+                  <p className="text-white font-medium">No se pudieron cargar las mesas</p>
+                  <p className="text-gray-400 text-sm">{errorCarga || 'Revise la conexión a internet.'}</p>
+                  <Button onClick={() => cargarDatos()} className="boton-marca text-white">Reintentar</Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+        <>
         {/* Selector de Pisos */}
         <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardContent className="p-3 sm:p-6">
@@ -209,12 +317,12 @@ export default function MeseroDashboard({ user, onLogout }) {
                 <span className="text-gray-300">Disponible</span>
               </div>
               <div className="flex items-center space-x-1 sm:space-x-2">
-                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-600/30 border border-blue-600 rounded"></div>
+                <div className={`w-3 h-3 sm:w-4 sm:h-4 border rounded ${miColor.bg} ${miColor.border}`}></div>
                 <span className="text-gray-300">Mi Mesa</span>
               </div>
               <div className="flex items-center space-x-1 sm:space-x-2">
-                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-purple-600/10 border border-purple-600/50 rounded"></div>
-                <span className="text-gray-300">Otro Mesero</span>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-slate-400/10 border border-slate-400/50 rounded"></div>
+                <span className="text-gray-300">Otro Mesero 🔒</span>
               </div>
             </div>
           </CardContent>
@@ -232,8 +340,8 @@ export default function MeseroDashboard({ user, onLogout }) {
                 const mesaKey = `${zona.numero}-${numeroMesa}`;
                 const mesaData = mesas[mesaKey];
                 const ocupada = mesaData && mesaData.pedidos?.length > 0;
-                const meseroAsignado = mesaData?.mesero;
-                const esMiMesa = meseroAsignado === user.name;
+                const meseroAsignado = mesaData?.mesero ?? '';
+                const esMiMesa = esDeEsteMesero(mesaData);
 
                 // Definir colores según el estado y mesero
                 let clasesMesa = 'w-full h-auto aspect-square rounded-xl p-2 sm:p-4 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ';
@@ -266,7 +374,7 @@ export default function MeseroDashboard({ user, onLogout }) {
                         esMiMesa ? 'Mi Mesa' : `${meseroAsignado.split(' ')[0]}`
                       ) : 'Libre'}
                     </p>
-                    {ocupada && mesaData.total && (
+                    {ocupada && mesaData.total > 0 && (
                       <p className="text-[10px] sm:text-xs font-medium mt-0.5 sm:mt-1">
                         ${mesaData.total.toLocaleString()}
                       </p>
@@ -282,6 +390,8 @@ export default function MeseroDashboard({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
 
       {/* Modal de Pedido */}
@@ -290,8 +400,8 @@ export default function MeseroDashboard({ user, onLogout }) {
           zona={zona}
           mesaSeleccionada={mesaSeleccionada}
           mesas={mesas}
-          setMesas={guardarMesas}
-          onCerrar={cerrarPedido}
+          guardarMesa={guardarMesa}
+          onCerrar={cerrarModales}
           onAbrirCobro={abrirCobro}
           user={user}
           menu={menu}
@@ -304,8 +414,8 @@ export default function MeseroDashboard({ user, onLogout }) {
           zonaNombre={zona.nombre}
           mesaSeleccionada={mesaSeleccionada}
           mesaData={mesas[`${zona.numero}-${mesaSeleccionada}`]}
-          onCerrar={() => setMostrarCobro(false)}
-          onProcesarCobro={(mesaData) => procesarCobro(`${zona.numero}-${mesaSeleccionada}`, mesaData)}
+          onCerrar={cerrarModales}
+          onProcesarCobro={(datosCobro) => procesarCobro(`${zona.numero}-${mesaSeleccionada}`, datosCobro)}
         />
       )}
     </div>

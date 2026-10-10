@@ -35,8 +35,9 @@ export const totalPedidos = (pedidos: ItemPedido[] = []) => pedidos.reduce((suma
 export const nombreItem = (p: ItemPedido) =>
   p.tipo === 'picada' ? `Picada ${p.size ?? ''}`.trim() : p.nombre || 'Producto';
 
+// En los pedidos anteriores manda el tipo (algunas bebidas guardaban en "categoria" el tipo de bebida)
 export const categoriaItem = (p: ItemPedido) =>
-  p.categoria || (p.tipo && CATEGORIA_POR_TIPO[p.tipo]) || 'Otros';
+  (p.tipo && CATEGORIA_POR_TIPO[p.tipo]) || p.categoria || 'Otros';
 
 // Texto corto con lo que se eligió, por ejemplo "Res, Cerdo • Jugoso"
 export const detalleItem = (p: ItemPedido) => {
