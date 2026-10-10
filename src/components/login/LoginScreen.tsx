@@ -300,10 +300,10 @@ export default function LoginScreen({ email, setEmail, password, setPassword, ro
                 </Button>
                 <Button
                   onClick={handleForgotPassword}
+                  disabled={isLoading}
                   className="flex-1 boton-marca"
                 >
-                  {resetStep === 1 && 'Enviar Enlace'}
-                  {resetStep === 3 && 'Cambiar Contraseña'}
+                  {isLoading ? 'Enviando…' : resetStep === 3 ? 'Cambiar Contraseña' : 'Enviar Enlace'}
                 </Button>
               </div>
             </CardContent>
