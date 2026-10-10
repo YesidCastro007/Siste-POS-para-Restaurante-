@@ -9,6 +9,7 @@ import { getMeseroColorConfig } from '@/lib/meseroColors';
 import { cargarMesas, guardarCambiosMesas, liberarMesa, liberarMesaCobrada, registrarVenta, leerConfig, mantenerActualizado } from '@/lib/datos';
 import ModalPedido, { type Mesa } from './ModalPedido';
 import ModalCobro from './ModalCobro';
+import { pesos } from '@/lib/formato';
 
 export default function MeseroDashboard({ user, onLogout }) {
   const negocio = useNombreNegocio();
@@ -224,7 +225,7 @@ export default function MeseroDashboard({ user, onLogout }) {
     const avisoCaja = estadoCaja && !estadoCaja.abierta
       ? '\n\nOjo: la caja está cerrada. Avise a la cajera para que esta venta quede en el próximo turno.'
       : '';
-    alert(`¡Cobro procesado exitosamente! Total: $${venta.total.toLocaleString()}${avisoCaja}`);
+    alert(`¡Cobro procesado exitosamente! Total: ${pesos(venta.total)}${avisoCaja}`);
   };
 
   const abrirCobro = () => {
@@ -376,7 +377,7 @@ export default function MeseroDashboard({ user, onLogout }) {
                     </p>
                     {ocupada && mesaData.total > 0 && (
                       <p className="text-[10px] sm:text-xs font-medium mt-0.5 sm:mt-1">
-                        ${mesaData.total.toLocaleString()}
+                        {pesos(mesaData.total)}
                       </p>
                     )}
                     {ocupada && !esMiMesa && (

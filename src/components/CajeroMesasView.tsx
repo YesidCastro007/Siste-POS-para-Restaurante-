@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, mantenerActualizado } from '@/lib/datos';
 import { cargarZonas, ZONAS_POR_DEFECTO, type Zona } from '@/lib/menu';
 import { nombreItem, subtotal } from '@/lib/pedidos';
+import { pesos } from '@/lib/formato';
 
 // Colores sólidos con texto blanco, para que se lean bien sobre el fondo claro
 const MESERO_COLORS = {
@@ -68,12 +69,12 @@ export default function CajeroMesasView() {
             </div>
             <div className="text-center">
               <p className="text-slate-300 text-xs sm:text-sm font-medium">Total Pendiente</p>
-              <p className="text-3xl sm:text-4xl font-bold text-white">${totalMesasActivas.toLocaleString()}</p>
+              <p className="text-3xl sm:text-4xl font-bold text-white">{pesos(totalMesasActivas)}</p>
             </div>
             <div className="text-center">
               <p className="text-slate-300 text-xs sm:text-sm font-medium">Promedio por Mesa</p>
               <p className="text-3xl sm:text-4xl font-bold text-white">
-                ${mesasActivas.length > 0 ? Math.round(totalMesasActivas / mesasActivas.length).toLocaleString() : 0}
+                {pesos(mesasActivas.length > 0 ? totalMesasActivas / mesasActivas.length : 0)}
               </p>
             </div>
           </div>
@@ -98,7 +99,7 @@ export default function CajeroMesasView() {
                 >
                   <span className="block text-base sm:text-lg font-bold leading-tight truncate max-w-full">{z.nombre}</span>
                   <span className="text-xs sm:text-sm">{mesasDelPiso.length} activas</span>
-                  <span className="text-[10px] sm:text-xs font-semibold">${totalPiso.toLocaleString()}</span>
+                  <span className="text-[10px] sm:text-xs font-semibold">{pesos(totalPiso)}</span>
                 </Button>
               );
             })}
@@ -134,7 +135,7 @@ export default function CajeroMesasView() {
                     <>
                       <p className={`text-[10px] sm:text-xs font-medium ${colorConfig.text} truncate w-full text-center`}>{mesaData.mesero}</p>
                       <p className={`text-xs sm:text-sm font-bold mt-0.5 sm:mt-1 ${colorConfig.text}`}>
-                        ${mesaData.total.toLocaleString()}
+                        {pesos(mesaData.total)}
                       </p>
                       <p className={`text-[9px] sm:text-xs ${colorConfig.text} mt-0.5 sm:mt-1`}>
                         {mesaData.pedidos?.length} items
@@ -179,7 +180,7 @@ export default function CajeroMesasView() {
                             <p className="text-xs sm:text-sm text-slate-400 truncate max-w-[120px] sm:max-w-none">{mesaData.mesero}</p>
                           </div>
                         </div>
-                        <p className="text-xl sm:text-2xl font-bold text-emerald-300">${mesaData.total.toLocaleString()}</p>
+                        <p className="text-xl sm:text-2xl font-bold text-emerald-300">{pesos(mesaData.total)}</p>
                       </div>
                       <div className="bg-black/20 rounded p-2 sm:p-3 space-y-1">
                         {mesaData.pedidos?.map((pedido, idx) => (
@@ -188,7 +189,7 @@ export default function CajeroMesasView() {
                               {pedido.cantidad}x {nombreItem(pedido)}
                             </span>
                             <span className="text-white font-medium whitespace-nowrap">
-                              ${subtotal(pedido).toLocaleString()}
+                              {pesos(subtotal(pedido))}
                             </span>
                           </div>
                         ))}

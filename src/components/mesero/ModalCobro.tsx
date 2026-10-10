@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { nombreItem, subtotal } from '@/lib/pedidos';
+import { pesos, miles } from '@/lib/formato';
 
 export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onCerrar, onProcesarCobro }) {
   const [metodoPago, setMetodoPago] = useState('efectivo');
@@ -19,7 +20,9 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
   const idVenta = useRef(Date.now());
 
   const total = mesaData?.total || 0;
-  const cambio = montoPagado ? Math.max(0, parseInt(montoPagado.replace(/[^0-9]/g, '')) - total) : 0;
+  const recibido = montoPagado ? parseInt(montoPagado) : 0;
+  const cambio = Math.max(0, recibido - total);
+  const falta = Math.max(0, total - recibido);
 
   const metodosPago = [
     { id: 'efectivo', nombre: 'Efectivo', icono: Banknote, color: 'from-green-500 to-green-600' },
@@ -34,7 +37,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
       return;
     }
 
-    if (metodoPago === 'efectivo' && parseInt(montoPagado.replace(/[^0-9]/g, '')) < total) {
+    if (metodoPago === 'efectivo' && recibido < total) {
       alert('El monto pagado es insuficiente');
       return;
     }
@@ -48,7 +51,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
       ...mesaData,
       idVenta: idVenta.current,
       metodoPago: metodoPago === 'transferencia' ? `${metodoPago} - ${tipoTransferencia}` : metodoPago,
-      montoPagado: metodoPago === 'efectivo' ? parseInt(montoPagado.replace(/[^0-9]/g, '')) : total,
+      montoPagado: metodoPago === 'efectivo' ? recibido : total,
       cambio: metodoPago === 'efectivo' ? cambio : 0,
       notaAdicional,
       total
@@ -97,7 +100,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
                       {pedido.cantidad}x {nombreItem(pedido)}
                     </span>
                     <span className="text-green-400 font-medium">
-                      ${subtotal(pedido).toLocaleString()}
+                      {pesos(subtotal(pedido))}
                     </span>
                   </div>
                 ))}
@@ -105,7 +108,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
               <Separator className="my-3 bg-cyan-400/15" />
               <div className="flex justify-between items-center">
                 <span className="text-white font-semibold">Subtotal:</span>
-                <span className="text-xl font-bold text-white">${total.toLocaleString()}</span>
+                <span className="text-xl font-bold text-white">{pesos(total)}</span>
               </div>
             </div>
 
@@ -150,21 +153,29 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
             <div className="bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-xl p-4 border border-green-500/40">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-semibold text-white">Total a Pagar:</span>
-                <span className="text-3xl font-bold text-green-400">${total.toLocaleString()}</span>
+                <span className="text-3xl font-bold text-green-400">{pesos(total)}</span>
               </div>
             </div>
 
             {metodoPago === 'efectivo' && (
               <div>
                 <label className="block text-sm font-medium text-cyan-300 mb-2">Monto Recibido</label>
-                <Input type="text" inputMode="numeric" value={montoPagado ? parseInt(montoPagado.replace(/[^0-9]/g, '')).toLocaleString() : ''}
+                <Input type="text" inputMode="numeric" value={montoPagado ? miles(parseInt(montoPagado)) : ''}
                   onChange={(e) => setMontoPagado(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ingrese el monto recibido" className="bg-white/5 border-cyan-400/20 text-white text-xl h-14 font-semibold" />
-                {montoPagado && cambio >= 0 && (
+                {montoPagado && falta > 0 && (
+                  <div className="mt-3 p-4 bg-red-500/15 rounded-lg border border-red-500/40">
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-300 font-medium">Falta por recibir:</span>
+                      <span className="text-2xl font-bold text-red-300">{pesos(falta)}</span>
+                    </div>
+                  </div>
+                )}
+                {montoPagado && falta === 0 && (
                   <div className="mt-3 p-4 bg-blue-500/20 rounded-lg border border-blue-500/40">
                     <div className="flex justify-between items-center">
                       <span className="text-blue-300 font-medium">Cambio a devolver:</span>
-                      <span className="text-2xl font-bold text-blue-400">${cambio.toLocaleString()}</span>
+                      <span className="text-2xl font-bold text-blue-400">{pesos(cambio)}</span>
                     </div>
                   </div>
                 )}

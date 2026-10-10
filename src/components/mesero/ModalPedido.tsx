@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Categoria, Producto } from '@/lib/menu';
 import { type ItemPedido, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
+import { pesos, miles } from '@/lib/formato';
 
 // Colores de las categorías, en orden
 const COLORES = [
@@ -274,7 +275,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                       >
                         <span className="font-medium truncate">{producto.nombre}</span>
                         <span className="text-green-400 font-bold ml-2 shrink-0">
-                          {!producto.disponible ? 'Agotado' : producto.precio_libre ? 'Precio libre' : `$${producto.precio.toLocaleString()}`}
+                          {!producto.disponible ? 'Agotado' : producto.precio_libre ? 'Precio libre' : pesos(producto.precio)}
                         </span>
                       </Button>
                     ))}
@@ -333,7 +334,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                         <Input
                           type="text"
                           inputMode="numeric"
-                          value={precioLibre ? parseInt(precioLibre).toLocaleString() : ''}
+                          value={precioLibre ? miles(parseInt(precioLibre)) : ''}
                           onChange={(e) => setPrecioLibre(e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="Ej: 25.000"
                           className="bg-white/5 border-cyan-400/20 text-white h-10 sm:h-12 text-sm"
@@ -341,7 +342,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                       </div>
                     ) : (
                       <div className="flex items-end">
-                        <p className="text-green-400 font-bold text-lg">${configurando.precio.toLocaleString()}</p>
+                        <p className="text-green-400 font-bold text-lg">{pesos(configurando.precio)}</p>
                       </div>
                     )}
                     <div className="flex items-end">
@@ -423,7 +424,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                           </div>
                           
                           <p className="text-green-400 font-bold text-sm">
-                            ${subtotal(pedido).toLocaleString()}
+                            {pesos(subtotal(pedido))}
                           </p>
                         </div>
                       </div>
@@ -437,7 +438,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                   <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">
                     <span className="text-base sm:text-lg font-semibold text-white">Total:</span>
                     <span className="text-xl sm:text-2xl font-bold text-green-400">
-                      ${totalPedidos(pedidos).toLocaleString()}
+                      {pesos(totalPedidos(pedidos))}
                     </span>
                   </div>
 

@@ -1,18 +1,46 @@
 import React, { useState } from 'react';
-import { LogOut, UtensilsCrossed, X, Plus, Clock, Calculator, BarChart3, CreditCard, Banknote, Smartphone, Receipt, FileText, MessageCircle, BookOpen } from 'lucide-react';
+import { LogOut, UtensilsCrossed, Clock, BarChart3, CreditCard, Banknote, Smartphone, Receipt, MessageCircle, BookOpen, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarcaEncabezado } from '@/components/marca/Marca';
 import { useNombreNegocio } from '@/hooks/useNombreNegocio';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import EditorMenu from '@/components/menu/EditorMenu';
 import EditorZonas from '@/components/menu/EditorZonas';
-import { type ItemPedido, nombreItem, detalleItem, subtotal, precioUnitario, categoriaItem } from '@/lib/pedidos';
-import { cargarVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
 import CajeroMesasView from '@/components/CajeroMesasView';
-import { generarReportePDF, enviarReportePorWhatsApp } from '@/lib/reportePDF';
+import ModalDetalleVenta from './ModalDetalleVenta';
+import ModalWhatsApp from './ModalWhatsApp';
+import ModalReporteCierre, { type CierreTerminado } from './ModalReporteCierre';
+import { type Venta, cargarVentas, crearCargadorDeVentas, leerConfig, guardarConfig, mantenerActualizado } from '@/lib/datos';
+import { type Periodo, inicioDelPeriodo } from '@/lib/estadisticas';
+import { generarReporteCierre, totalesPorMetodo } from '@/lib/reporteCierre';
+import { generarReportePDF, descargarPDF } from '@/lib/reportePDF';
+import { pesos, fechaHora, hora } from '@/lib/formato';
+
+// Estado de la caja compartido en Supabase (config 'caja_estado').
+// fechaApertura: desde cuándo cuentan las ventas del turno. fechaCierre: cuándo se cerró el último turno.
+interface EstadoCaja {
+  abierta: boolean;
+  fechaApertura: string | null;
+  cajero?: string;
+  horaApertura?: string;
+  fechaCierre?: string;
+}
+
+const CAJA_CERRADA: EstadoCaja = { abierta: false, fechaApertura: null };
+
+const PERIODOS_CAJA: { id: Periodo; label: string }[] = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'semana', label: 'Semana' },
+  { id: 'mes', label: 'Mes' },
+  { id: 'todo', label: 'Todo' }
+];
+
+const sumaTotal = (ventas: Venta[]) => ventas.reduce((suma, venta) => suma + venta.total, 0);
+
+// Los números guardados antes podían incluir el 57 del país
+const celularSinPais = (numero: string) => (numero.length === 12 && numero.startsWith('57') ? numero.slice(2) : numero);
 
 // Tarjeta con una cifra del turno o del periodo
 function Estadistica({ titulo, valor, Icono, destacado = false }) {
@@ -29,67 +57,58 @@ function Estadistica({ titulo, valor, Icono, destacado = false }) {
   );
 }
 
-// Suma las categorías del cierre en bebidas (las que tienen "bebida" en el nombre) y alimentos (el resto)
-const bebidasYAlimentos = (categorias: Record<string, { cantidad: number; ingresos: number }>) => {
-  const suma = { bebidas: { cantidad: 0, ingresos: 0 }, alimentos: { cantidad: 0, ingresos: 0 } };
-  Object.entries(categorias).forEach(([nombre, datos]) => {
-    const grupo = /bebida/i.test(nombre) ? suma.bebidas : suma.alimentos;
-    grupo.cantidad += datos.cantidad;
-    grupo.ingresos += datos.ingresos;
-  });
-  return suma;
-};
-
-// Fecha desde la que se muestran las ventas según el periodo elegido (null = todas)
-const inicioDelFiltro = (filtro: string): Date | null => {
-  const hoy = new Date();
-  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  if (filtro === 'hoy') return inicioHoy;
-  if (filtro === 'semana') return new Date(inicioHoy.getFullYear(), inicioHoy.getMonth(), inicioHoy.getDate() - 7);
-  if (filtro === 'mes') return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  return null;
-};
+const VISTAS = [
+  { id: 'ventas', nombre: 'Ventas y Caja', Icono: Receipt },
+  { id: 'mesas', nombre: 'Vista de Mesas', Icono: UtensilsCrossed },
+  { id: 'menu', nombre: 'Menú y Mesas', Icono: BookOpen }
+] as const;
 
 export default function CajeraDashboard({ user, onLogout }) {
   const negocio = useNombreNegocio();
-  const [ventasHoy, setVentasHoy] = useState([]);
-  const [filtroFecha, setFiltroFecha] = useState('hoy');
+  const [ventas, setVentas] = useState<Venta[]>([]);
+  const [filtroFecha, setFiltroFecha] = useState<Periodo>('hoy');
   const [busquedaMesa, setBusquedaMesa] = useState('');
-  const [mostrarDetalleVenta, setMostrarDetalleVenta] = useState(null);
-  const [cajaAbierta, setCajaAbierta] = useState(false);
-  const [fechaApertura, setFechaApertura] = useState(null);
+  const [ventaDetalle, setVentaDetalle] = useState<Venta | null>(null);
+  // null mientras no se sabe si la caja está abierta (así no aparece "Abrir Caja" antes de tiempo)
+  const [caja, setCaja] = useState<EstadoCaja | null>(null);
+  const [procesandoCaja, setProcesandoCaja] = useState(false);
   const [mostrarReporte, setMostrarReporte] = useState(false);
-  const [reporteCierre, setReporteCierre] = useState(null);
-  const [vistaActual, setVistaActual] = useState('ventas'); // 'ventas', 'mesas' o 'menu'
-  const [numeroWhatsApp, setNumeroWhatsApp] = useState('');
+  const [cerrando, setCerrando] = useState(false);
+  const [cierreTerminado, setCierreTerminado] = useState<CierreTerminado | null>(null);
+  const [vistaActual, setVistaActual] = useState<(typeof VISTAS)[number]['id']>('ventas');
   const [mostrarConfigWhatsApp, setMostrarConfigWhatsApp] = useState(false);
-
   const [numeroConfigurado, setNumeroConfigurado] = useState('');
+  const [sinConexion, setSinConexion] = useState(false);
 
-  // Ventas, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos
+  const cajaAbierta = !!caja?.abierta;
+  const fechaApertura = caja?.fechaApertura ?? null;
+
+  // Ventas, estado de caja y WhatsApp se guardan en Supabase y se comparten entre dispositivos.
   // Solo se descargan las ventas que se muestran: las del turno si la caja está abierta,
-  // o las del periodo elegido si está cerrada
+  // o las del periodo elegido si está cerrada (y después, solo las nuevas)
   const filtroFechaRef = React.useRef(filtroFecha);
   filtroFechaRef.current = filtroFecha;
+  const cargador = React.useRef(crearCargadorDeVentas());
   const numeroCarga = React.useRef(0);
   const cargarDatos = React.useCallback(async () => {
     const carga = ++numeroCarga.current;
     try {
-      const estadoCaja = await leerConfig('caja_estado', { abierta: false, fechaApertura: null });
+      const estadoCaja = await leerConfig<EstadoCaja>('caja_estado', CAJA_CERRADA);
       const desde = estadoCaja.abierta && estadoCaja.fechaApertura
         ? new Date(estadoCaja.fechaApertura)
-        : inicioDelFiltro(filtroFechaRef.current);
-      const [ventas, numero] = await Promise.all([
-        cargarVentas(desde),
+        : inicioDelPeriodo(filtroFechaRef.current);
+      const [lista, numero] = await Promise.all([
+        cargador.current(desde),
         leerConfig('whatsapp_numero', '')
       ]);
       if (carga !== numeroCarga.current) return;
-      setVentasHoy(ventas);
-      setCajaAbierta(!!estadoCaja.abierta);
-      setFechaApertura(estadoCaja.fechaApertura);
+      setVentas(lista);
+      setCaja(estadoCaja);
       setNumeroConfigurado(numero);
+      setSinConexion(false);
     } catch (error) {
       console.error('Error cargando datos:', error.message);
+      if (carga === numeroCarga.current) setSinConexion(true);
     }
   }, []);
 
@@ -102,160 +121,138 @@ export default function CajeraDashboard({ user, onLogout }) {
     cargarDatos();
   }, [filtroFecha, cargarDatos]);
 
-  // Guarda un ajuste compartido; si falla, avisa y vuelve a cargar lo que hay en Supabase
-  const guardarAjuste = async (key, value) => {
-    try {
-      await guardarConfig(key, value);
-      return true;
-    } catch (error) {
-      console.error(`Error guardando ${key}:`, error.message);
-      alert('⚠️ No se pudo guardar el cambio. Revise la conexión a internet.');
-      cargarDatos();
-      return false;
-    }
+  const ventasDelTurno = (lista = ventas) => {
+    if (!fechaApertura) return [];
+    const inicio = new Date(fechaApertura);
+    return lista.filter(venta => new Date(venta.fecha) >= inicio);
   };
 
   const abrirCaja = async () => {
-    const ahora = new Date().toISOString();
-    const guardado = await guardarAjuste('caja_estado', {
-      abierta: true,
-      fechaApertura: ahora,
-      cajero: user.name
-    });
-    if (!guardado) return;
-    setCajaAbierta(true);
-    setFechaApertura(ahora);
-    alert(`✅ Caja abierta exitosamente\nCajero: ${user.name}\nHora: ${new Date(ahora).toLocaleString()}`);
+    if (procesandoCaja) return;
+    setProcesandoCaja(true);
+    try {
+      // Se revisa en Supabase por si otra cajera ya la abrió (no se reinicia un turno abierto)
+      const actual = await leerConfig<EstadoCaja>('caja_estado', CAJA_CERRADA);
+      if (actual.abierta) {
+        alert(`La caja ya estaba abierta desde ${fechaHora(actual.fechaApertura)}${actual.cajero ? ` (${actual.cajero})` : ''}.`);
+        return;
+      }
+      const ahora = new Date().toISOString();
+      let inicio = ahora;
+      // Ventas que los meseros cobraron con la caja cerrada, después del último cierre
+      if (actual.fechaCierre) {
+        const sinCierre = await cargarVentas(new Date(actual.fechaCierre));
+        if (sinCierre.length > 0) {
+          const incluir = confirm(
+            `Hay ${sinCierre.length} ${sinCierre.length === 1 ? 'venta' : 'ventas'} por ${pesos(sumaTotal(sinCierre))} cobradas con la caja cerrada ` +
+            `(desde el último cierre, ${fechaHora(actual.fechaCierre)}).\n\n` +
+            '¿Sumarlas a este turno? Si elige Cancelar, no entrarán en ningún cierre.'
+          );
+          if (incluir) inicio = actual.fechaCierre;
+        }
+      }
+      const nuevo: EstadoCaja = { abierta: true, fechaApertura: inicio, horaApertura: ahora, cajero: user.name };
+      await guardarConfig('caja_estado', nuevo);
+      setCaja(nuevo);
+      alert(`✅ Caja abierta exitosamente\nCajero: ${user.name}\nHora: ${fechaHora(ahora)}`);
+    } catch (error) {
+      console.error('Error abriendo la caja:', error.message);
+      alert('⚠️ No se pudo guardar el cambio. Revise la conexión a internet.');
+    } finally {
+      setProcesandoCaja(false);
+      cargarDatos();
+    }
   };
 
   const cerrarCaja = () => {
-    const ventasDelDia = filtrarVentasDelDia();
-    const reporte = generarReporte(ventasDelDia);
-    setReporteCierre(reporte);
+    if (ventasDelTurno().length === 0 && !confirm('No hay ventas en este turno. ¿Cerrar la caja de todos modos?')) return;
+    setCierreTerminado(null);
     setMostrarReporte(true);
+    cargarDatos();
   };
 
   const confirmarCierreCaja = async () => {
-    const guardado = await guardarAjuste('caja_estado', {
-      abierta: false,
-      fechaApertura: null
-    });
-    if (!guardado) return;
-
-    // Guardar reporte en historial
+    if (cerrando || !fechaApertura) return;
+    setCerrando(true);
+    const cierre = new Date().toISOString();
     try {
-      const historialReportes = await leerConfig('historial_cierres', []);
-      await guardarConfig('historial_cierres', [...historialReportes, { ...reporteCierre, id: Date.now() }]);
+      // Si otra cajera ya cerró este turno, no se cierra dos veces
+      const actual = await leerConfig<EstadoCaja>('caja_estado', CAJA_CERRADA);
+      if (!actual.abierta || actual.fechaApertura !== fechaApertura) {
+        alert('Este turno ya se cerró desde otro dispositivo.');
+        setMostrarReporte(false);
+        setCerrando(false);
+        cargarDatos();
+        return;
+      }
+      await guardarConfig('caja_estado', { abierta: false, fechaApertura: null, fechaCierre: cierre, cajero: user.name });
+    } catch (error) {
+      console.error('Error cerrando la caja:', error.message);
+      alert('⚠️ No se pudo cerrar la caja. Revise la conexión a internet.');
+      setCerrando(false);
+      return;
+    }
+
+    // El reporte final se arma con las ventas guardadas en Supabase hasta el cierre,
+    // también las que llegaron mientras se revisaba el reporte
+    let ventasCierre = ventasDelTurno().filter(venta => new Date(venta.fecha) < new Date(cierre));
+    try {
+      ventasCierre = (await cargarVentas(new Date(fechaApertura))).filter(venta => new Date(venta.fecha) < new Date(cierre));
+    } catch (error) {
+      console.error('No se pudieron volver a cargar las ventas del turno:', error.message);
+    }
+    const reporte = generarReporteCierre(ventasCierre, { inicio: fechaApertura, fin: cierre, cajero: user.name, negocio });
+
+    try {
+      const historial = await leerConfig<unknown[]>('historial_cierres', []);
+      await guardarConfig('historial_cierres', [...(Array.isArray(historial) ? historial : []), { ...reporte, id: Date.now() }]);
     } catch (error) {
       console.error('Error guardando historial de cierres:', error.message);
+      alert('⚠️ La caja se cerró, pero el reporte no quedó guardado en el historial. Guarde el PDF que se va a descargar.');
     }
-    
-    // Generar PDF
-    const pdf = generarReportePDF(reporteCierre);
-    
-    // Si hay número de WhatsApp configurado, enviar
-    if (numeroConfigurado) {
-      enviarReportePorWhatsApp(pdf, numeroConfigurado, negocio);
-    } else {
-      // Solo descargar el PDF
-      pdf.save(`Reporte_Cierre_${new Date().toISOString().split('T')[0]}.pdf`);
-    }
-    
-    setCajaAbierta(false);
-    setFechaApertura(null);
+
+    const pdf = generarReportePDF(reporte);
+    descargarPDF(pdf);
+    setCaja({ abierta: false, fechaApertura: null, fechaCierre: cierre, cajero: user.name });
+    setCierreTerminado({ reporte, pdf });
+    setCerrando(false);
+    cargarDatos();
+  };
+
+  const terminarCierre = () => {
     setMostrarReporte(false);
-    setReporteCierre(null);
-    
-    alert('✅ Caja cerrada exitosamente. El reporte ha sido generado en PDF.');
+    setCierreTerminado(null);
   };
 
-  const guardarNumeroWhatsApp = async () => {
-    if (!numeroWhatsApp.trim()) {
-      alert('Por favor ingrese un número de teléfono');
-      return;
+  const guardarNumeroWhatsApp = async (numero: string) => {
+    try {
+      await guardarConfig('whatsapp_numero', numero);
+    } catch (error) {
+      console.error('Error guardando whatsapp_numero:', error.message);
+      alert('⚠️ No se pudo guardar el cambio. Revise la conexión a internet.');
+      return false;
     }
-    
-    const numeroLimpio = numeroWhatsApp.replace(/\D/g, '');
-    if (numeroLimpio.length < 10) {
-      alert('Número de teléfono inválido');
-      return;
-    }
-    
-    if (!(await guardarAjuste('whatsapp_numero', numeroLimpio))) return;
-    setNumeroConfigurado(numeroLimpio);
+    setNumeroConfigurado(numero);
     setMostrarConfigWhatsApp(false);
-    alert('✅ Número de WhatsApp guardado exitosamente');
+    return true;
   };
 
-  const filtrarVentasDelDia = () => {
-    if (!fechaApertura) return [];
-    const inicioTurno = new Date(fechaApertura);
-    return ventasHoy.filter(venta => {
-      const fechaVenta = new Date(venta.fecha);
-      return fechaVenta >= inicioTurno;
-    });
-  };
+  // Con la caja abierta se muestran las ventas del turno; cerrada, las del periodo elegido.
+  // Las cifras son del turno o del periodo; el buscador solo filtra la lista.
+  const desdePeriodo = inicioDelPeriodo(filtroFecha);
+  const ventasDelPeriodo = cajaAbierta
+    ? ventasDelTurno()
+    : ventas.filter(venta => !desdePeriodo || new Date(venta.fecha) >= desdePeriodo);
+  const busqueda = busquedaMesa.trim().toLowerCase();
+  const ventasMostradas = busqueda
+    ? ventasDelPeriodo.filter(venta => venta.mesa.toLowerCase().includes(busqueda))
+    : ventasDelPeriodo;
+  const totalVentas = sumaTotal(ventasDelPeriodo);
+  const ventasPorMetodo = totalesPorMetodo(ventasDelPeriodo);
 
-  const generarReporte = (ventas) => {
-    const total = ventas.reduce((sum, venta) => sum + venta.total, 0);
-    const porMetodo = ventas.reduce((acc, venta) => {
-      const metodo = venta.metodoPago || 'efectivo';
-      acc[metodo] = (acc[metodo] || 0) + venta.total;
-      return acc;
-    }, {});
-    
-    // Análisis por categorías y productos (las categorías son las del menú de cada negocio)
-    const categorias = {};
-    ventas.forEach(venta => {
-      venta.pedidos?.forEach((pedido: ItemPedido) => {
-        const cantidad = pedido.cantidad;
-        const precio = precioUnitario(pedido);
-        const ingresos = subtotal(pedido);
-        const categoria = categoriaItem(pedido);
-        const nombreProducto = nombreItem(pedido);
-        categorias[categoria] ??= { cantidad: 0, ingresos: 0, productos: {} };
-        categorias[categoria].cantidad += cantidad;
-        categorias[categoria].ingresos += ingresos;
-        categorias[categoria].productos[nombreProducto] ??= { cantidad: 0, ingresos: 0, precioUnitario: precio };
-        categorias[categoria].productos[nombreProducto].cantidad += cantidad;
-        categorias[categoria].productos[nombreProducto].ingresos += ingresos;
-      });
-    });
-    
-    // Calcular porcentajes
-    Object.keys(categorias).forEach(cat => {
-      categorias[cat].porcentaje = total > 0 ? ((categorias[cat].ingresos / total) * 100).toFixed(1) : 0;
-    });
-    
-    return {
-      fecha: new Date().toLocaleString(),
-      turnoInicio: new Date(fechaApertura).toLocaleString(),
-      turnoFin: new Date().toLocaleString(),
-      totalVentas: total,
-      cantidadOrdenes: ventas.length,
-      ventasPorMetodo: porMetodo,
-      cajero: user.name,
-      negocio,
-      categorias: categorias
-    };
-  };
-
-  const filtrarVentas = () => {
-    const desde = inicioDelFiltro(filtroFecha);
-    return ventasHoy.filter(venta => {
-      const coincideMesa = busquedaMesa === '' || venta.mesa.toLowerCase().includes(busquedaMesa.toLowerCase());
-      return coincideMesa && (!desde || new Date(venta.fecha) >= desde);
-    });
-  };
-
-  // Mostrar solo ventas del turno actual si la caja está abierta
-  const ventasFiltradas = cajaAbierta ? filtrarVentasDelDia() : filtrarVentas();
-  const totalVentas = ventasFiltradas.reduce((sum, venta) => sum + venta.total, 0);
-  const ventasPorMetodo = ventasFiltradas.reduce((acc, venta) => {
-    const metodo = venta.metodoPago || 'efectivo';
-    acc[metodo] = (acc[metodo] || 0) + venta.total;
-    return acc;
-  }, {});
+  const reportePrevio = mostrarReporte && fechaApertura && !cierreTerminado
+    ? generarReporteCierre(ventasDelTurno(), { inicio: fechaApertura, fin: new Date().toISOString(), cajero: user.name, negocio })
+    : null;
 
   return (
     <div className="min-h-screen fondo-shadow">
@@ -284,43 +281,31 @@ export default function CajeraDashboard({ user, onLogout }) {
       </div>
 
       <div className="container mx-auto px-4 py-6 space-y-6">
+        {sinConexion && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            <WifiOff className="w-4 h-4 shrink-0" />
+            Sin conexión con el servidor: las ventas pueden no estar al día. Revise el internet.
+          </div>
+        )}
+
         {/* Selector de Vista */}
         <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-3 gap-3">
-              <Button
-                onClick={() => setVistaActual('ventas')}
-                className={`h-16 flex flex-col items-center justify-center transition-all ${
-                  vistaActual === 'ventas'
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
-                }`}
-              >
-                <Receipt className="w-6 h-6 mb-1" />
-                <span className="text-sm font-medium">Ventas y Caja</span>
-              </Button>
-              <Button
-                onClick={() => setVistaActual('mesas')}
-                className={`h-16 flex flex-col items-center justify-center transition-all ${
-                  vistaActual === 'mesas'
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
-                }`}
-              >
-                <UtensilsCrossed className="w-6 h-6 mb-1" />
-                <span className="text-sm font-medium">Vista de Mesas</span>
-              </Button>
-              <Button
-                onClick={() => setVistaActual('menu')}
-                className={`h-16 flex flex-col items-center justify-center transition-all ${
-                  vistaActual === 'menu'
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
-                }`}
-              >
-                <BookOpen className="w-6 h-6 mb-1" />
-                <span className="text-sm font-medium">Menú y Mesas</span>
-              </Button>
+          <CardContent className="p-3 sm:p-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {VISTAS.map(({ id, nombre, Icono }) => (
+                <Button
+                  key={id}
+                  onClick={() => setVistaActual(id)}
+                  className={`h-auto min-h-16 py-2 px-1 flex flex-col items-center justify-center whitespace-normal transition-all ${
+                    vistaActual === id
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-cyan-400/10'
+                  }`}
+                >
+                  <Icono className="w-6 h-6 mb-1 shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium leading-tight text-center">{nombre}</span>
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -341,16 +326,15 @@ export default function CajeraDashboard({ user, onLogout }) {
             : 'bg-slate-900/60 border-amber-400/30'
         }`}>
           <CardContent className="p-4 sm:p-6">
+            {caja === null ? (
+              <p className="text-slate-300 text-center py-4">Cargando estado de la caja…</p>
+            ) : (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
                 <div className={`w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-full flex items-center justify-center ${
                   cajaAbierta ? 'bg-emerald-500/20 ring-1 ring-emerald-400/50' : 'bg-amber-400/10 ring-1 ring-amber-400/40'
                 }`}>
-                  {cajaAbierta ? (
-                    <span className="text-3xl">🔓</span>
-                  ) : (
-                    <span className="text-3xl">🔒</span>
-                  )}
+                  <span className="text-3xl">{cajaAbierta ? '🔓' : '🔒'}</span>
                 </div>
                 <div>
                   <h3 className="font-marca text-xl font-bold text-white">
@@ -358,12 +342,15 @@ export default function CajeraDashboard({ user, onLogout }) {
                   </h3>
                   {cajaAbierta ? (
                     <div className="text-sm text-slate-300 space-y-1">
-                      <p>📅 Apertura: {new Date(fechaApertura).toLocaleString()}</p>
-                      <p>💰 Ventas del turno: {filtrarVentasDelDia().length} órdenes</p>
-                      <p>💵 Total acumulado: ${filtrarVentasDelDia().reduce((sum, v) => sum + v.total, 0).toLocaleString()}</p>
+                      <p>📅 Apertura: {fechaHora(caja.horaApertura ?? fechaApertura)}</p>
+                      {caja.horaApertura && caja.horaApertura !== fechaApertura && (
+                        <p>🧾 Incluye ventas desde {fechaHora(fechaApertura)}</p>
+                      )}
+                      <p>💰 Ventas del turno: {ventasDelTurno().length} órdenes</p>
+                      <p>💵 Total acumulado: {pesos(sumaTotal(ventasDelTurno()))}</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-400">Debe abrir la caja para comenzar a registrar ventas</p>
+                    <p className="text-sm text-slate-400">Abra la caja al empezar el turno: el cierre suma las ventas desde la apertura.</p>
                   )}
                 </div>
               </div>
@@ -371,21 +358,22 @@ export default function CajeraDashboard({ user, onLogout }) {
                 {!cajaAbierta ? (
                   <Button
                     onClick={abrirCaja}
+                    disabled={procesandoCaja}
                     className="boton-marca w-full sm:w-auto h-12 px-8 text-base font-semibold"
                   >
-                    🔓 Abrir Caja
+                    {procesandoCaja ? 'Abriendo…' : '🔓 Abrir Caja'}
                   </Button>
                 ) : (
                   <Button
                     onClick={cerrarCaja}
-                    disabled={filtrarVentasDelDia().length === 0}
-                    className="w-full sm:w-auto h-12 bg-transparent border border-red-400/60 text-red-200 hover:bg-red-500/20 px-8 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto h-12 bg-transparent border border-red-400/60 text-red-200 hover:bg-red-500/20 px-8 text-base font-semibold"
                   >
                     🔒 Cerrar Caja y Ver Reporte
                   </Button>
                 )}
               </div>
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -393,33 +381,30 @@ export default function CajeraDashboard({ user, onLogout }) {
         {cajaAbierta && (
           <div className="bg-cyan-400/10 border border-cyan-400/30 rounded-lg p-3">
             <p className="text-cyan-200 text-sm font-medium text-center">
-              📊 Mostrando solo ventas del turno actual (desde {new Date(fechaApertura).toLocaleTimeString()})
+              📊 Mostrando solo ventas del turno actual (desde {hora(fechaApertura)})
             </p>
           </div>
         )}
         
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-          <Estadistica titulo={cajaAbierta ? 'Total Turno' : 'Total Ventas'} valor={`$${totalVentas.toLocaleString()}`} Icono={BarChart3} destacado />
-          <Estadistica titulo="Órdenes" valor={ventasFiltradas.length} Icono={Receipt} />
-          <Estadistica titulo="Efectivo" valor={`$${(ventasPorMetodo.efectivo || 0).toLocaleString()}`} Icono={Banknote} />
-          <Estadistica titulo="Tarjeta" valor={`$${(ventasPorMetodo.tarjeta || 0).toLocaleString()}`} Icono={CreditCard} />
-          <Estadistica titulo="Nequi" valor={`$${(ventasPorMetodo['transferencia - Nequi'] || 0).toLocaleString()}`} Icono={Smartphone} />
-          <Estadistica titulo="Daviplata" valor={`$${(ventasPorMetodo['transferencia - Daviplata'] || 0).toLocaleString()}`} Icono={Smartphone} />
+          <Estadistica titulo={cajaAbierta ? 'Total Turno' : 'Total Ventas'} valor={pesos(totalVentas)} Icono={BarChart3} destacado />
+          <Estadistica titulo="Órdenes" valor={ventasDelPeriodo.length} Icono={Receipt} />
+          <Estadistica titulo="Efectivo" valor={pesos(ventasPorMetodo.efectivo || 0)} Icono={Banknote} />
+          <Estadistica titulo="Tarjeta" valor={pesos(ventasPorMetodo.tarjeta || 0)} Icono={CreditCard} />
+          <Estadistica titulo="Nequi" valor={pesos(ventasPorMetodo['transferencia - Nequi'] || 0)} Icono={Smartphone} />
+          <Estadistica titulo="Daviplata" valor={pesos(ventasPorMetodo['transferencia - Daviplata'] || 0)} Icono={Smartphone} />
         </div>
 
         {/* Configuración de WhatsApp */}
         <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-white flex items-center">
                 <MessageCircle className="w-5 h-5 mr-2 text-green-400" />
                 Configuración de WhatsApp
               </CardTitle>
               <Button
-                onClick={() => {
-                  setNumeroWhatsApp(numeroConfigurado);
-                  setMostrarConfigWhatsApp(true);
-                }}
+                onClick={() => setMostrarConfigWhatsApp(true)}
                 className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
@@ -434,14 +419,14 @@ export default function CajeraDashboard({ user, onLogout }) {
                   <p className="text-white font-medium">Número configurado:</p>
                   <p className="text-gray-300 text-sm mt-1">
                     {numeroConfigurado
-                      ? `+57 ${numeroConfigurado}`
+                      ? `+57 ${celularSinPais(numeroConfigurado)}`
                       : 'No configurado'}
                   </p>
                 </div>
                 <MessageCircle className="w-8 h-8 text-green-400" />
               </div>
               <p className="text-gray-400 text-xs mt-3">
-                💡 Al cerrar la caja, el reporte se generará en PDF y se enviará automáticamente al número configurado por WhatsApp.
+                💡 Al cerrar la caja se descarga el reporte en PDF y puede enviarlo por WhatsApp a este número.
               </p>
             </div>
           </CardContent>
@@ -449,17 +434,15 @@ export default function CajeraDashboard({ user, onLogout }) {
 
         {/* Filtros y Búsqueda */}
         <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row gap-4 items-center">
-              <div className="flex items-center space-x-2">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col md:flex-row gap-4 md:items-center">
+              {cajaAbierta ? (
+                <p className="text-cyan-200 text-sm font-medium">Período: turno actual</p>
+              ) : (
+              <div className="flex flex-wrap items-center gap-2">
                 <label className="text-white font-medium">Período:</label>
-                <div className="flex space-x-2">
-                  {[
-                    { id: 'hoy', label: 'Hoy' },
-                    { id: 'semana', label: 'Semana' },
-                    { id: 'mes', label: 'Mes' },
-                    { id: 'todo', label: 'Todo' }
-                  ].map((periodo) => (
+                <div className="flex flex-wrap gap-2">
+                  {PERIODOS_CAJA.map((periodo) => (
                     <Button
                       key={periodo.id}
                       onClick={() => setFiltroFecha(periodo.id)}
@@ -475,14 +458,15 @@ export default function CajeraDashboard({ user, onLogout }) {
                   ))}
                 </div>
               </div>
+              )}
               
-              <div className="flex items-center space-x-2 flex-1">
+              <div className="flex items-center gap-2 w-full md:flex-1">
                 <label className="text-white font-medium">Buscar:</label>
                 <Input
                   value={busquedaMesa}
                   onChange={(e) => setBusquedaMesa(e.target.value)}
                   placeholder="Buscar por mesa..."
-                  className="bg-white/5 border-cyan-400/20 text-white max-w-xs"
+                  className="bg-white/5 border-cyan-400/20 text-white w-full md:max-w-xs"
                 />
               </div>
             </div>
@@ -492,10 +476,10 @@ export default function CajeraDashboard({ user, onLogout }) {
         {/* Lista de Ventas */}
         <Card className="bg-white/5 backdrop-blur-md border-cyan-400/10">
           <CardHeader>
-            <CardTitle className="text-white flex items-center justify-between">
+            <CardTitle className="text-white flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center">
                 <Receipt className="w-5 h-5 mr-2 text-green-400" />
-                {cajaAbierta ? 'Ventas del Turno Actual' : 'Historial de Ventas'} ({ventasFiltradas.length})
+                {cajaAbierta ? 'Ventas del Turno Actual' : 'Historial de Ventas'} ({ventasMostradas.length})
               </div>
               <Badge className="bg-cyan-400/20 text-cyan-200 border border-cyan-400/30">
                 🔄 Actualización automática
@@ -504,32 +488,30 @@ export default function CajeraDashboard({ user, onLogout }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {ventasFiltradas.length === 0 ? (
+              {ventasMostradas.length === 0 ? (
                 <div className="text-center py-12">
                   <Clock className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                   <p className="text-gray-400">No hay ventas para mostrar</p>
                 </div>
               ) : (
-                ventasFiltradas.map((venta) => (
-                  <div key={venta.id} className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 rounded-lg p-4 border border-cyan-400/15 hover:border-cyan-400/40 transition-all duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                            <UtensilsCrossed className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold">Mesa {venta.mesa}</p>
-                            <p className="text-gray-400 text-sm">
-                              {new Date(venta.fecha).toLocaleString()} • {venta.mesero}
-                            </p>
-                          </div>
+                ventasMostradas.map((venta) => (
+                  <div key={venta.id} className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 rounded-lg p-3 sm:p-4 border border-cyan-400/15 hover:border-cyan-400/40 transition-all duration-200">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                          <UtensilsCrossed className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white font-semibold">Mesa {venta.mesa}</p>
+                          <p className="text-gray-400 text-xs sm:text-sm truncate">
+                            {fechaHora(venta.fecha)} • {venta.mesero}
+                          </p>
                         </div>
                       </div>
                       
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-green-400">${venta.total.toLocaleString()}</p>
-                        <div className="flex items-center space-x-2 mt-1">
+                      <div className="text-right shrink-0">
+                        <p className="text-xl sm:text-2xl font-bold text-green-400">{pesos(venta.total)}</p>
+                        <div className="flex flex-wrap items-center justify-end gap-2 mt-1">
                           <Badge className={`text-xs ${
                             venta.metodoPago === 'efectivo' ? 'bg-green-500/20 text-green-400' :
                             venta.metodoPago === 'tarjeta' ? 'bg-blue-500/20 text-blue-400' :
@@ -538,7 +520,7 @@ export default function CajeraDashboard({ user, onLogout }) {
                             {venta.metodoPago}
                           </Badge>
                           <Button
-                            onClick={() => setMostrarDetalleVenta(venta)}
+                            onClick={() => setVentaDetalle(venta)}
                             variant="outline"
                             size="sm"
                             className="border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white"
@@ -558,300 +540,26 @@ export default function CajeraDashboard({ user, onLogout }) {
         )}
       </div>
 
-      {/* Modal Detalle de Venta */}
-      {mostrarDetalleVenta && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="bg-transparent w-full max-w-2xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900/95 via-[#0B1630]/95 to-slate-950/95 backdrop-blur-xl border border-cyan-400/20">
-            <CardHeader className="border-b border-cyan-400/20">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white">Detalle de Venta - Mesa {mostrarDetalleVenta.mesa}</CardTitle>
-                <Button
-                  onClick={() => setMostrarDetalleVenta(null)}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 overflow-y-auto">
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-400">Fecha:</p>
-                    <p className="text-white font-medium">{new Date(mostrarDetalleVenta.fecha).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Mesero:</p>
-                    <p className="text-white font-medium">{mostrarDetalleVenta.mesero}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Método de Pago:</p>
-                    <p className="text-white font-medium">{mostrarDetalleVenta.metodoPago}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Total:</p>
-                    <p className="text-green-400 font-bold text-lg">${mostrarDetalleVenta.total.toLocaleString()}</p>
-                  </div>
-                </div>
-                
-                <Separator className="bg-cyan-400/15" />
-                
-                <div>
-                  <h4 className="text-white font-semibold mb-3">Productos:</h4>
-                  <div className="space-y-2">
-                    {mostrarDetalleVenta.pedidos?.map((pedido, index) => (
-                      <div key={index} className="flex justify-between items-center bg-white/5 rounded-lg p-3">
-                        <div>
-                          <p className="text-white font-medium">
-                            {pedido.cantidad}x {nombreItem(pedido)}
-                          </p>
-                          {detalleItem(pedido) && (
-                            <p className="text-gray-400 text-sm">{detalleItem(pedido)}</p>
-                          )}
-                        </div>
-                        <p className="text-green-400 font-bold">
-                          ${subtotal(pedido).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {mostrarDetalleVenta.notaAdicional && (
-                  <div>
-                    <h4 className="text-white font-semibold mb-2">Nota Adicional:</h4>
-                    <p className="text-gray-300 bg-white/5 rounded-lg p-3">{mostrarDetalleVenta.notaAdicional}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {ventaDetalle && <ModalDetalleVenta venta={ventaDetalle} onCerrar={() => setVentaDetalle(null)} />}
 
-      {/* Modal Configuración WhatsApp */}
       {mostrarConfigWhatsApp && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="bg-transparent w-full max-w-md bg-gradient-to-br from-slate-900/95 via-green-900/95 to-slate-900/95 backdrop-blur-xl border border-green-500/30">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white flex items-center">
-                  <MessageCircle className="w-6 h-6 mr-2 text-green-400" />
-                  Configurar WhatsApp
-                </CardTitle>
-                <Button
-                  onClick={() => setMostrarConfigWhatsApp(false)}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-green-300 mb-2">
-                  Número de Teléfono (WhatsApp)
-                </label>
-                <Input
-                  type="tel"
-                  value={numeroWhatsApp}
-                  onChange={(e) => setNumeroWhatsApp(e.target.value)}
-                  placeholder="Ej: 3001234567"
-                  className="bg-white/5 border-green-500/30 text-white"
-                />
-                <p className="text-gray-400 text-xs mt-2">
-                  💡 Ingrese el número sin espacios ni guiones. El código de país (+57) se agregará automáticamente.
-                </p>
-              </div>
-              
-              <div className="p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
-                <p className="text-blue-200 text-sm">
-                  ℹ️ Al cerrar la caja, el reporte se generará en PDF y se abrirá WhatsApp Web automáticamente para enviarlo al número configurado.
-                </p>
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button
-                  onClick={() => setMostrarConfigWhatsApp(false)}
-                  variant="outline"
-                  className="flex-1 border-gray-600 text-gray-400"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={guardarNumeroWhatsApp}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Guardar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <ModalWhatsApp
+          numeroActual={celularSinPais(numeroConfigurado)}
+          onGuardar={guardarNumeroWhatsApp}
+          onCerrar={() => setMostrarConfigWhatsApp(false)}
+        />
       )}
 
-      {/* Modal Reporte de Cierre */}
-      {mostrarReporte && reporteCierre && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden bg-white shadow-2xl">
-            <CardHeader className="bg-gradient-to-r from-[#0F172A] to-[#13254A] text-white">
-              <CardTitle className="text-center">📊 Reporte General de Ventas - Cierre de Caja</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 overflow-y-auto max-h-[calc(95vh-100px)]">
-              <div className="space-y-6">
-                {/* Balance General */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h3 className="text-lg font-bold text-blue-800 mb-3">📊 Balance General del Día</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">Cajero:</p>
-                      <p className="font-semibold text-gray-900">{reporteCierre.cajero}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Apertura:</p>
-                      <p className="font-semibold text-gray-900">{reporteCierre.turnoInicio}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Cierre:</p>
-                      <p className="font-semibold text-gray-900">{reporteCierre.turnoFin}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Transacciones:</p>
-                      <p className="font-semibold text-gray-900">{reporteCierre.cantidadOrdenes}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 p-3 bg-green-100 rounded border border-green-300">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-green-800">Ingresos Totales:</span>
-                      <span className="text-3xl font-bold text-green-600">${reporteCierre.totalVentas.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ventas por Categorías */}
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">🏷️ Ventas por Categorías</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(reporteCierre.categorias).map(([categoria, datos]: [string, any]) => (
-                      datos.cantidad > 0 && (
-                        <div key={categoria} className="bg-gray-50 p-4 rounded-lg border">
-                          <h4 className="font-semibold text-gray-800 mb-2">{categoria}</h4>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span>Cantidad:</span>
-                              <span className="font-medium">{datos.cantidad}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Ingresos:</span>
-                              <span className="font-medium text-green-600">${datos.ingresos.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Participación:</span>
-                              <span className="font-medium text-blue-600">{datos.porcentaje}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </div>
-
-                {/* Detalle por Productos */}
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">🍽️ Detalle por Productos</h3>
-                  <div className="space-y-4">
-                    {Object.entries(reporteCierre.categorias).map(([categoria, datos]: [string, any]) => (
-                      datos.cantidad > 0 && (
-                        <div key={categoria} className="border rounded-lg p-4">
-                          <h4 className="font-semibold text-gray-800 mb-3 bg-gray-100 p-2 rounded">{categoria}</h4>
-                          <div className="grid gap-2">
-                            {Object.entries(datos.productos).map(([producto, info]: [string, any]) => (
-                              <div key={producto} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                                <div>
-                                  <span className="font-medium">{producto}</span>
-                                  <span className="text-gray-500 text-sm ml-2">(${info.precioUnitario.toLocaleString()} c/u)</span>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-medium">Cant: {info.cantidad}</div>
-                                  <div className="text-green-600 font-semibold">${info.ingresos.toLocaleString()}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </div>
-
-                {/* Métodos de Pago */}
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">💳 Métodos de Pago</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {Object.entries(reporteCierre.ventasPorMetodo).map(([metodo, monto]: [string, any]) => (
-                      <div key={metodo} className="bg-gray-50 p-4 rounded-lg border">
-                        <div className="text-center">
-                          <p className="text-gray-600 capitalize text-sm">{metodo}</p>
-                          <p className="font-bold text-lg text-gray-900">${(monto as number).toLocaleString()}</p>
-                          <p className="text-xs text-blue-600">
-                            {(((monto as number) / reporteCierre.totalVentas) * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Resumen de Bebidas vs Alimentos */}
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">🍺 Resumen Bebidas vs Alimentos</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      <h4 className="font-semibold text-blue-800">Bebidas</h4>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {bebidasYAlimentos(reporteCierre.categorias).bebidas.cantidad}
-                      </p>
-                      <p className="text-sm text-blue-600">
-                        ${bebidasYAlimentos(reporteCierre.categorias).bebidas.ingresos.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                      <h4 className="font-semibold text-orange-800">Alimentos</h4>
-                      <p className="text-2xl font-bold text-orange-600">
-                        {bebidasYAlimentos(reporteCierre.categorias).alimentos.cantidad}
-                      </p>
-                      <p className="text-sm text-orange-600">
-                        ${bebidasYAlimentos(reporteCierre.categorias).alimentos.ingresos.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex space-x-3 pt-4 border-t">
-                  <Button
-                    onClick={() => setMostrarReporte(false)}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={confirmarCierreCaja}
-                    className="flex-1 boton-marca"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Confirmar y Generar PDF
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {mostrarReporte && (reportePrevio || cierreTerminado) && (
+        <ModalReporteCierre
+          reporte={cierreTerminado?.reporte ?? reportePrevio}
+          cerrando={cerrando}
+          terminado={cierreTerminado}
+          numeroWhatsApp={numeroConfigurado}
+          onConfirmar={confirmarCierreCaja}
+          onCancelar={() => setMostrarReporte(false)}
+          onTerminar={terminarCierre}
+        />
       )}
     </div>
   );

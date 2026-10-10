@@ -16,6 +16,8 @@ export interface Venta {
   montoPagado?: number | null;
   cambio?: number | null;
   notaAdicional?: string | null;
+  // Hora del servidor en que se guardó (created_at)
+  creadaEn?: string | null;
 }
 
 const getClient = () => {
@@ -64,42 +66,82 @@ export const liberarMesaCobrada = async (mesaKey: string, fechaCreacion?: string
 // Supabase entrega como máximo 1.000 filas por consulta, así que las ventas se piden por páginas.
 const VENTAS_POR_PAGINA = 1000;
 
-// Carga las ventas desde una fecha (o todas si desde es null), de la más nueva a la más vieja.
-// Pedir solo el periodo que se muestra evita descargar toda la historia en cada actualización.
-export const cargarVentas = async (desde: Date | null = null): Promise<Venta[]> => {
-  const filas = [];
+type ConsultaVentas = ReturnType<ReturnType<ReturnType<typeof getClient>['from']>['select']>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FilaVenta = Record<string, any>;
+
+const aVenta = (fila: FilaVenta): Venta => ({
+  id: Number(fila.id),
+  fecha: fila.fecha,
+  mesa: fila.mesa,
+  mesero: fila.mesero,
+  pedidos: fila.pedidos,
+  total: fila.total,
+  metodoPago: fila.metodo_pago,
+  montoPagado: fila.monto_pagado ?? null,
+  cambio: fila.cambio ?? null,
+  notaAdicional: fila.nota_adicional ?? null,
+  creadaEn: fila.created_at ?? null
+});
+
+// De la más nueva a la más vieja
+const porFechaDescendente = (a: Venta, b: Venta) => b.fecha.localeCompare(a.fecha) || b.id - a.id;
+
+const traerVentas = async (filtrar: (consulta: ConsultaVentas) => ConsultaVentas): Promise<Venta[]> => {
+  const filas: FilaVenta[] = [];
   const vistas = new Set<number>();
   for (let pagina = 0; ; pagina++) {
-    let consulta = getClient()
-      .from('ventas')
-      .select('*')
+    const consulta = filtrar(getClient().from('ventas').select('*'))
       .order('fecha', { ascending: false })
       .order('id', { ascending: false })
       .range(pagina * VENTAS_POR_PAGINA, (pagina + 1) * VENTAS_POR_PAGINA - 1);
-    if (desde) consulta = consulta.gte('fecha', desde.toISOString());
     const { data, error } = await consulta;
     if (error) throw new Error(error.message);
     // Si entra una venta nueva mientras se descargan las páginas, la última de una página
     // se repite al inicio de la siguiente: se cuenta una sola vez
-    (data ?? []).forEach(fila => {
+    ((data ?? []) as FilaVenta[]).forEach(fila => {
       if (vistas.has(Number(fila.id))) return;
       vistas.add(Number(fila.id));
       filas.push(fila);
     });
     if (!data || data.length < VENTAS_POR_PAGINA) break;
   }
-  return filas.map(fila => ({
-    id: Number(fila.id),
-    fecha: fila.fecha,
-    mesa: fila.mesa,
-    mesero: fila.mesero,
-    pedidos: fila.pedidos,
-    total: fila.total,
-    metodoPago: fila.metodo_pago,
-    montoPagado: fila.monto_pagado ?? null,
-    cambio: fila.cambio ?? null,
-    notaAdicional: fila.nota_adicional ?? null
-  }));
+  return filas.map(aVenta);
+};
+
+// Carga las ventas desde una fecha (o todas si desde es null), de la más nueva a la más vieja.
+// Pedir solo el periodo que se muestra evita descargar toda la historia en cada actualización.
+export const cargarVentas = (desde: Date | null = null) =>
+  traerVentas(consulta => (desde ? consulta.gte('fecha', desde.toISOString()) : consulta));
+
+// Para pantallas que se actualizan solas. Las ventas no se modifican ni se borran, así que
+// después de la primera carga de un periodo solo se piden las que el servidor registró desde
+// la última vez (con un minuto de margen, sin repetir), en vez de descargar todo otra vez.
+export const crearCargadorDeVentas = () => {
+  let desdeCargado: number | null | undefined;
+  let ventas: Venta[] = [];
+  return async (desde: Date | null): Promise<Venta[]> => {
+    const clave = desde ? desde.getTime() : null;
+    const ultima = ventas.reduce((max, v) => (v.creadaEn && v.creadaEn > max ? v.creadaEn : max), '');
+    if (clave !== desdeCargado || !ultima) {
+      const todas = await cargarVentas(desde);
+      ventas = todas;
+      desdeCargado = clave;
+      return todas;
+    }
+    const margen = new Date(new Date(ultima).getTime() - 60000).toISOString();
+    const nuevas = await traerVentas(consulta => {
+      const recientes = consulta.gte('created_at', margen);
+      return desde ? recientes.gte('fecha', desde.toISOString()) : recientes;
+    });
+    // Mientras tanto se pidió otro periodo: esta respuesta ya no sirve
+    if (desdeCargado !== clave) return ventas;
+    const ids = new Set(ventas.map(v => v.id));
+    const agregadas = nuevas.filter(v => !ids.has(v.id));
+    if (agregadas.length > 0) ventas = [...agregadas, ...ventas].sort(porFechaDescendente);
+    return ventas;
+  };
 };
 
 // Guarda la venta. Si el cobro se envía dos veces (doble toque, o se reintenta porque la
