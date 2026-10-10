@@ -3,7 +3,7 @@ import { LogOut, TrendingUp, Receipt, Calculator, UtensilsCrossed, Users, BarCha
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cargarMesas, cargarVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
+import { cargarMesas, crearCargadorDeVentas, mantenerActualizado, type Mesas, type Venta } from '@/lib/datos';
 import EditorMenu from '@/components/menu/EditorMenu';
 import EditorZonas from '@/components/menu/EditorZonas';
 import EditorNegocio from '@/components/menu/EditorNegocio';
@@ -140,7 +140,7 @@ function FilaUsuario({ usuario, editable, alCambiar }: { usuario: Usuario; edita
           </div>
         )}
       </div>
-      {error && <p className="text-cyan-300 text-xs mt-2">{error}</p>}
+      {error && <p className="text-red-300 text-xs mt-2">{error}</p>}
     </div>
   );
 }
@@ -157,11 +157,14 @@ function TooltipDia({ active, payload }: { active?: boolean; payload?: { payload
   );
 }
 
-export default function DueñoDashboard({ user, onLogout }) {
+export default function DuenoDashboard({ user, onLogout }) {
   const negocio = useNombreNegocio();
   const [periodo, setPeriodo] = useState<Periodo>('hoy');
   const [seccion, setSeccion] = useState<'resumen' | 'menu' | 'usuarios'>('resumen');
   const [ventas, setVentas] = useState<Venta[]>([]);
+  // Periodo de las ventas que ya llegaron: al cambiar de periodo, hasta que lleguen las nuevas
+  // no se muestran cifras de otro periodo con la etiqueta nueva
+  const [periodoCargado, setPeriodoCargado] = useState<Periodo | null>(null);
   const [mesas, setMesas] = useState<Mesas>({});
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [error, setError] = useState('');
@@ -174,14 +177,18 @@ export default function DueñoDashboard({ user, onLogout }) {
 
   React.useEffect(() => {
     let numeroCarga = 0;
+    // Después de la primera carga solo se piden las ventas nuevas
+    const cargarVentas = crearCargadorDeVentas();
     const cargar = async () => {
       const carga = ++numeroCarga;
+      const periodoPedido = periodoRef.current;
       try {
         const [ventasGuardadas, mesasGuardadas, perfiles] = await Promise.all([
-          cargarVentas(desdeParaCargar(periodoRef.current)), cargarMesas(), cargarUsuarios()
+          cargarVentas(desdeParaCargar(periodoPedido)), cargarMesas(), cargarUsuarios()
         ]);
         if (carga !== numeroCarga) return;
         setVentas(ventasGuardadas);
+        setPeriodoCargado(periodoPedido);
         setMesas(mesasGuardadas);
         setUsuarios(perfiles);
         setError('');
@@ -200,6 +207,7 @@ export default function DueñoDashboard({ user, onLogout }) {
     recargar();
   }, [periodo]);
 
+  const cargandoPeriodo = periodoCargado !== periodo;
   const ventasDelPeriodo = useMemo(() => filtrarPorPeriodo(ventas, periodo), [ventas, periodo]);
   const totales = resumen(ventasDelPeriodo);
   const dias = useMemo(() => ventasPorDia(ventas, diasDelGrafico(periodo)), [ventas, periodo]);
@@ -267,15 +275,17 @@ export default function DueñoDashboard({ user, onLogout }) {
               {p.nombre}
             </Button>
           ))}
+          {cargandoPeriodo && <span className="self-center text-gray-400 text-sm">Cargando…</span>}
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Indicador titulo="Total vendido" valor={formatoPesos(totales.total)} detalle={nombrePeriodo} Icono={TrendingUp} />
-          <Indicador titulo="Órdenes" valor={totales.ordenes} detalle={nombrePeriodo} Icono={Receipt} />
-          <Indicador titulo="Promedio por orden" valor={formatoPesos(totales.promedio)} detalle={nombrePeriodo} Icono={Calculator} />
+          <Indicador titulo="Total vendido" valor={cargandoPeriodo ? '…' : formatoPesos(totales.total)} detalle={nombrePeriodo} Icono={TrendingUp} />
+          <Indicador titulo="Órdenes" valor={cargandoPeriodo ? '…' : totales.ordenes} detalle={nombrePeriodo} Icono={Receipt} />
+          <Indicador titulo="Promedio por orden" valor={cargandoPeriodo ? '…' : formatoPesos(totales.promedio)} detalle={nombrePeriodo} Icono={Calculator} />
           <Indicador titulo="Mesas activas ahora" valor={mesasActivas.length} detalle={`${formatoPesos(pendiente)} por cobrar`} Icono={UtensilsCrossed} />
         </div>
 
+        <div className={`space-y-6 transition-opacity ${cargandoPeriodo ? 'opacity-40' : ''}`} aria-busy={cargandoPeriodo}>
         <Card className="bg-white/5 border-white/10">
           <CardHeader className="p-4 sm:p-5 pb-0">
             <CardTitle className="text-white text-base sm:text-lg">Ventas por día</CardTitle>
@@ -302,6 +312,7 @@ export default function DueñoDashboard({ user, onLogout }) {
           <Ranking titulo="Ventas por método de pago" filas={porMetodo(ventasDelPeriodo)} contar={ordenes} vacio="Sin ventas en este periodo" />
           <Ranking titulo="Productos más vendidos" filas={productosMasVendidos(ventasDelPeriodo)} contar={unidades} vacio="Sin ventas en este periodo" />
         </div>
+        </div>
         </>
         )}
 
@@ -312,7 +323,7 @@ export default function DueñoDashboard({ user, onLogout }) {
               <Users className="w-5 h-5 mr-2 text-gray-300" />
               Usuarios ({usuarios.length})
             </CardTitle>
-            <p className="text-gray-400 text-xs">Elige el rol de cada persona. Quien esté desactivado no puede iniciar sesión.</p>
+            <p className="text-gray-400 text-xs">Elige el rol de cada persona. Quien esté desactivado no puede iniciar sesión, y si tenía la app abierta se le cierra en menos de un minuto.</p>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 pt-2">
             <div className="divide-y divide-white/10">

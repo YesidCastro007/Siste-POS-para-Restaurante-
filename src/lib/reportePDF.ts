@@ -1,26 +1,23 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { type ReporteCierre, textoPrecio, porcentajeDe, nombreArchivoCierre, resumenParaWhatsApp } from '@/lib/reporteCierre';
+import { pesos, fechaHora } from '@/lib/formato';
 
-export interface ReporteCierre {
-  fecha: string;
-  turnoInicio: string;
-  turnoFin: string;
-  totalVentas: number;
-  cantidadOrdenes: number;
-  ventasPorMetodo: Record<string, number>;
-  cajero: string;
-  negocio?: string;
-  categorias: Record<string, {
-    cantidad: number;
-    ingresos: number;
-    porcentaje: string;
-    productos: Record<string, {
-      cantidad: number;
-      ingresos: number;
-      precioUnitario: number;
-    }>;
-  }>;
-}
+export type { ReporteCierre };
+
+// La letra del PDF no tiene emojis: se quitan para que no salgan símbolos raros
+// (se conservan tildes, ñ y demás letras del español)
+const texto = (valor: string) => valor
+  .replace(/[\u00A0\u2007\u202F]/g, ' ')
+  .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+// Encabezado de las tablas con el azul de la marca SHADOW (#0F172A)
+const AZUL_MARCA: [number, number, number] = [15, 23, 42];
+
+// Dónde terminó la última tabla dibujada, para seguir escribiendo debajo
+const finDeLaTabla = (doc: jsPDF) => (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
 export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   const doc = new jsPDF();
@@ -29,7 +26,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   // Encabezado
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text((reporte.negocio || 'SHADOW').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+  doc.text(texto(reporte.negocio || 'SHADOW').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
   
   doc.setFontSize(16);
   doc.text('Reporte de Cierre de Caja', pageWidth / 2, 30, { align: 'center' });
@@ -39,11 +36,11 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   doc.setFont('helvetica', 'normal');
   let yPos = 45;
   
-  doc.text(`Cajero: ${reporte.cajero}`, 14, yPos);
+  doc.text(`Cajero: ${texto(reporte.cajero)}`, 14, yPos);
   yPos += 6;
-  doc.text(`Fecha de cierre: ${reporte.fecha}`, 14, yPos);
+  doc.text(texto(`Fecha de cierre: ${reporte.fecha}`), 14, yPos);
   yPos += 6;
-  doc.text(`Turno: ${reporte.turnoInicio} - ${reporte.turnoFin}`, 14, yPos);
+  doc.text(texto(`Turno: ${reporte.turnoInicio} - ${reporte.turnoFin}`), 14, yPos);
   yPos += 6;
   doc.text(`Total de órdenes: ${reporte.cantidadOrdenes}`, 14, yPos);
   yPos += 10;
@@ -54,7 +51,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`TOTAL DE VENTAS: $${reporte.totalVentas.toLocaleString()}`, pageWidth / 2, yPos + 8, { align: 'center' });
+  doc.text(`TOTAL DE VENTAS: ${pesos(reporte.totalVentas)}`, pageWidth / 2, yPos + 8, { align: 'center' });
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'normal');
   yPos += 20;
@@ -67,8 +64,8 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   
   const metodosPagoData = Object.entries(reporte.ventasPorMetodo).map(([metodo, monto]) => [
     metodo.charAt(0).toUpperCase() + metodo.slice(1),
-    `$${monto.toLocaleString()}`,
-    `${((monto / reporte.totalVentas) * 100).toFixed(1)}%`
+    pesos(monto),
+    `${porcentajeDe(monto, reporte.totalVentas)}%`
   ]);
   
   autoTable(doc, {
@@ -76,11 +73,11 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     head: [['Método', 'Monto', 'Porcentaje']],
     body: metodosPagoData,
     theme: 'grid',
-    headStyles: { fillColor: [220, 38, 38] },
+    headStyles: { fillColor: AZUL_MARCA },
     margin: { left: 14, right: 14 }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 10;
+  yPos = finDeLaTabla(doc) + 10;
   
   // Ventas por categorías
   doc.setFontSize(12);
@@ -91,9 +88,9 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   const categoriasData = Object.entries(reporte.categorias)
     .filter(([_, datos]) => datos.cantidad > 0)
     .map(([categoria, datos]) => [
-      categoria,
+      texto(categoria),
       datos.cantidad.toString(),
-      `$${datos.ingresos.toLocaleString()}`,
+      pesos(datos.ingresos),
       `${datos.porcentaje}%`
     ]);
   
@@ -102,11 +99,11 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     head: [['Categoría', 'Cantidad', 'Ingresos', '%']],
     body: categoriasData,
     theme: 'grid',
-    headStyles: { fillColor: [220, 38, 38] },
+    headStyles: { fillColor: AZUL_MARCA },
     margin: { left: 14, right: 14 }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 10;
+  yPos = finDeLaTabla(doc) + 10;
   
   // Detalle por productos (nueva página si es necesario)
   if (yPos > 250) {
@@ -129,14 +126,14 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
       
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(categoria, 14, yPos);
+      doc.text(texto(categoria), 14, yPos);
       yPos += 6;
       
       const productosData = Object.entries(datos.productos).map(([producto, info]) => [
-        producto,
+        texto(producto),
         info.cantidad.toString(),
-        `$${info.precioUnitario.toLocaleString()}`,
-        `$${info.ingresos.toLocaleString()}`
+        textoPrecio(info).replace(' c/u', ''),
+        pesos(info.ingresos)
       ]);
       
       autoTable(doc, {
@@ -149,7 +146,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
         margin: { left: 20, right: 14 }
       });
       
-      yPos = (doc as any).lastAutoTable.finalY + 8;
+      yPos = finDeLaTabla(doc) + 8;
     }
   });
   
@@ -160,7 +157,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     doc.setFontSize(8);
     doc.setTextColor(128, 128, 128);
     doc.text(
-      `Página ${i} de ${totalPages} - Generado con SHADOW el ${new Date().toLocaleString()}`,
+      texto(`Página ${i} de ${totalPages} - Generado con SHADOW el ${fechaHora(new Date())}`),
       pageWidth / 2,
       doc.internal.pageSize.getHeight() - 10,
       { align: 'center' }
@@ -170,34 +167,31 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   return doc;
 };
 
-export const enviarReportePorWhatsApp = (doc: jsPDF, numeroTelefono: string, negocio = '') => {
-  // Convertir PDF a blob
-  const pdfBlob = doc.output('blob');
-  const pdfUrl = URL.createObjectURL(pdfBlob);
-  
-  // Crear mensaje para WhatsApp
-  const mensaje = `Reporte de Cierre de Caja${negocio ? ` - ${negocio}` : ''}\nFecha: ${new Date().toLocaleDateString()}`;
-  
-  // Limpiar número de teléfono (remover espacios, guiones, etc.)
-  const numeroLimpio = numeroTelefono.replace(/\D/g, '');
-  
-  // Verificar si el número tiene código de país
-  const numeroFinal = numeroLimpio.startsWith('57') ? numeroLimpio : `57${numeroLimpio}`;
-  
-  // Abrir WhatsApp Web con el mensaje
-  const whatsappUrl = `https://wa.me/${numeroFinal}?text=${encodeURIComponent(mensaje)}`;
-  
-  // Abrir en nueva ventana
-  window.open(whatsappUrl, '_blank');
-  
-  // Descargar el PDF automáticamente
-  const link = document.createElement('a');
-  link.href = pdfUrl;
-  link.download = `Reporte_Cierre_${new Date().toISOString().split('T')[0]}.pdf`;
-  link.click();
-  
-  // Limpiar URL del blob después de un tiempo
-  setTimeout(() => URL.revokeObjectURL(pdfUrl), 100);
-  
-  return { pdfBlob, pdfUrl };
+export const descargarPDF = (doc: jsPDF) => doc.save(nombreArchivoCierre());
+
+// Número de celular con el código de Colombia (57)
+const numeroInternacional = (numero: string) => {
+  const limpio = numero.replace(/\D/g, '');
+  return limpio.length === 10 ? `57${limpio}` : limpio;
+};
+
+// Envía el cierre por WhatsApp. Se llama al tocar un botón (los celulares bloquean ventanas que
+// se abren solas). En celulares que permiten compartir archivos se comparte el PDF con el resumen;
+// si no, se abre WhatsApp con el resumen escrito para el número configurado.
+export const enviarPorWhatsApp = async (doc: jsPDF, reporte: ReporteCierre, numero: string) => {
+  const resumen = resumenParaWhatsApp(reporte);
+  const esCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (esCelular && typeof File !== 'undefined') {
+    const archivo = new File([doc.output('blob')], nombreArchivoCierre(), { type: 'application/pdf' });
+    if (navigator.canShare?.({ files: [archivo] })) {
+      try {
+        await navigator.share({ files: [archivo], text: resumen });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+  }
+  const destino = numero ? numeroInternacional(numero) : '';
+  window.open(`https://wa.me/${destino}?text=${encodeURIComponent(resumen)}`, '_blank');
 };

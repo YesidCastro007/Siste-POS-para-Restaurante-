@@ -10,12 +10,26 @@ import { cargarZonas, guardarZonas, type Zona } from '@/lib/menu';
 
 const campo = 'bg-white/10 border-white/20 text-white placeholder:text-gray-500 h-10';
 
+const mesasOcupadas = (mesas: Record<string, unknown>) => Object.entries(mesas)
+  .filter(([, m]) => ((m as { pedidos?: unknown[] })?.pedidos?.length ?? 0) > 0)
+  .map(([key]) => key);
+
 export default function EditorZonas() {
   const [guardadas, setGuardadas] = useState<Zona[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [ocupadas, setOcupadas] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
+  // Hasta que lleguen las zonas guardadas no se puede editar (guardar una lista vacía las borraría)
+  const [cargadas, setCargadas] = useState(false);
+  const [error, setError] = useState('');
   const modificado = JSON.stringify(zonas) !== JSON.stringify(guardadas);
+
+  // Si no hay cambios sin guardar, se muestra lo último guardado
+  const [ultimasGuardadas, setUltimasGuardadas] = useState<Zona[] | null>(null);
+  if (ultimasGuardadas && ultimasGuardadas !== guardadas) {
+    if (!modificado) setZonas(ultimasGuardadas);
+    setGuardadas(ultimasGuardadas);
+  }
 
   useEffect(() => {
     let numeroCarga = 0;
@@ -24,16 +38,13 @@ export default function EditorZonas() {
       try {
         const [z, mesas] = await Promise.all([cargarZonas(), cargarMesas()]);
         if (carga !== numeroCarga) return;
-        setGuardadas(anteriores => {
-          // Si no hay cambios sin guardar, se muestra lo último guardado
-          setZonas(actuales => (JSON.stringify(actuales) === JSON.stringify(anteriores) ? z : actuales));
-          return z;
-        });
-        setOcupadas(Object.entries(mesas)
-          .filter(([, m]) => ((m as { pedidos?: unknown[] })?.pedidos?.length ?? 0) > 0)
-          .map(([key]) => key));
+        setUltimasGuardadas(z);
+        setOcupadas(mesasOcupadas(mesas));
+        setCargadas(true);
+        setError('');
       } catch (e) {
         console.error('Error cargando mesas:', e instanceof Error ? e.message : e);
+        setError('No se pudieron cargar las zonas. Revise la conexión a internet.');
       }
     };
     return mantenerActualizado(['config', 'mesas'], cargar, 30000);
@@ -49,13 +60,40 @@ export default function EditorZonas() {
 
   // Guarda la lista de zonas. Devuelve true si se guardó.
   const guardar = async (lista: Zona[] = zonas): Promise<boolean> => {
+    if (!cargadas) return false;
     const limpias = lista.map(z => ({ ...z, nombre: z.nombre.trim() || `Zona ${z.numero}` }));
     if (limpias.length === 0) {
       alert('Debe haber al menos una zona');
       return false;
     }
+    const sinMesas = limpias.find(z => !z.mesas || z.mesas < 1);
+    if (sinMesas) {
+      alert(`"${sinMesas.nombre}" debe tener al menos 1 mesa.`);
+      return false;
+    }
+    setGuardando(true);
+    // Se revisa lo último guardado: otra persona pudo cambiar las zonas o abrir mesas mientras tanto
+    let actuales: Zona[];
+    let ocupadasAhora: string[];
+    try {
+      const [z, mesas] = await Promise.all([cargarZonas(), cargarMesas()]);
+      actuales = z;
+      ocupadasAhora = mesasOcupadas(mesas);
+    } catch (e) {
+      setGuardando(false);
+      alert(`⚠️ No se pudo guardar: ${e instanceof Error ? e.message : e}`);
+      return false;
+    }
+    if (JSON.stringify(actuales) !== JSON.stringify(guardadas) &&
+        !confirm('Mientras usted editaba, otra persona cambió las zonas.\n\nAceptar: guardar sus cambios (reemplazan los de la otra persona).\nCancelar: ver lo que guardó la otra persona.')) {
+      setGuardando(false);
+      setGuardadas(actuales);
+      setUltimasGuardadas(actuales);
+      setZonas(actuales);
+      return false;
+    }
     // No se puede quitar una mesa que tiene un pedido abierto
-    const perdidas = ocupadas.filter(key => {
+    const perdidas = ocupadasAhora.filter(key => {
       const [numero, mesa] = key.split('-').map(Number);
       const zona = limpias.find(z => z.numero === numero);
       return !zona || mesa > zona.mesas;
@@ -63,16 +101,17 @@ export default function EditorZonas() {
     if (perdidas.length > 0) {
       const nombres = perdidas.map(key => {
         const [numero, mesa] = key.split('-');
-        const zona = guardadas.find(z => z.numero === Number(numero));
+        const zona = actuales.find(z => z.numero === Number(numero));
         return `Mesa ${mesa} de ${zona?.nombre ?? `zona ${numero}`}`;
       });
       alert(`No se puede guardar: estas mesas tienen pedidos abiertos.\n${nombres.join('\n')}\nCóbrelas o libérelas primero.`);
+      setGuardando(false);
       return false;
     }
-    setGuardando(true);
     try {
       await guardarZonas(limpias);
       setGuardadas(limpias);
+      setUltimasGuardadas(limpias);
       setZonas(limpias);
       return true;
     } catch (e) {
@@ -104,6 +143,8 @@ export default function EditorZonas() {
         <p className="text-gray-400 text-sm">Por ejemplo: Piso 1, Terraza, Barra. Cada zona tiene sus mesas numeradas desde 1.</p>
       </CardHeader>
       <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-3">
+        {error && <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-red-200 text-sm">{error}</p>}
+        {!cargadas && !error && <p className="text-gray-400 text-sm">Cargando zonas…</p>}
         {zonas.map(z => (
           <div key={z.numero} className="grid grid-cols-[1fr_6rem_auto] gap-2 items-center">
             <Input
@@ -135,7 +176,7 @@ export default function EditorZonas() {
           </div>
         ))}
         <div className="flex flex-wrap gap-2 justify-between">
-          <Button onClick={agregar} variant="outline" size="sm" className="bg-transparent border-dashed border-white/30 text-gray-200 hover:bg-white/10">
+          <Button onClick={agregar} disabled={!cargadas} variant="outline" size="sm" className="bg-transparent border-dashed border-white/30 text-gray-200 hover:bg-white/10">
             <Plus className="w-4 h-4 mr-1" /> Agregar zona
           </Button>
           {modificado && (

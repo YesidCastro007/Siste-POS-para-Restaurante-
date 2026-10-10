@@ -104,28 +104,20 @@ export const MESERO_COLORS = {
   }
 };
 
-// Generar color único para cada mesero basado en su email
-export const generateMeseroColor = (email: string) => {
-  const colorKeys = Object.keys(MESERO_COLORS);
-  const users = getUsuariosCache();
-  const meseros = Object.values(users).filter((u: any) => u.role === 'mesero');
-  const meseroIndex = meseros.findIndex((m: any) => (m as any).email === email);
-  
-  if (meseroIndex !== -1) {
-    return colorKeys[meseroIndex % colorKeys.length];
-  }
-  
+export type ClaveColor = keyof typeof MESERO_COLORS;
+const CLAVES = Object.keys(MESERO_COLORS) as ClaveColor[];
+
+// Cada mesero tiene siempre el mismo color, en el panel del mesero y en las mesas de la caja:
+// el de su posición en la lista de meseros, o uno sacado de su nombre si no está en la lista
+export const claveColorDelMesero = (nombre: string): ClaveColor => {
+  const meseros = getUsuariosCache().filter(u => u.role === 'mesero');
+  const indice = meseros.findIndex(m => m.name === nombre);
+  if (indice !== -1) return CLAVES[indice % CLAVES.length];
   let hash = 0;
-  for (let i = 0; i < email.length; i++) {
-    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < nombre.length; i++) {
+    hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return colorKeys[Math.abs(hash) % colorKeys.length];
+  return CLAVES[Math.abs(hash) % CLAVES.length];
 };
 
-// Obtener configuración de color del mesero
-export const getMeseroColorConfig = (meseroName: string) => {
-  const users = getUsuariosCache();
-  const mesero = Object.values(users).find((user: any) => user.name === meseroName);
-  const colorKey = mesero ? generateMeseroColor((mesero as any).email) : 'blue';
-  return MESERO_COLORS[colorKey as keyof typeof MESERO_COLORS] || MESERO_COLORS.blue;
-};
+export const getMeseroColorConfig = (nombre: string) => MESERO_COLORS[claveColorDelMesero(nombre ?? '')];

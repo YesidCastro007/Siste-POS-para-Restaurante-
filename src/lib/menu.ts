@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { clienteSupabase } from '@/lib/supabase';
 import { leerConfig, guardarConfig } from '@/lib/datos';
 
 // Menú y mesas de cada negocio, guardados en Supabase y editables desde la app.
@@ -41,13 +41,6 @@ export interface Zona {
 
 export const ZONAS_POR_DEFECTO: Zona[] = [{ numero: 1, nombre: 'Salón', mesas: 10 }];
 
-const getClient = () => {
-  if (!supabase) {
-    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
-  }
-  return supabase;
-};
-
 const mensajeError = (error: { message: string }) => {
   if (/categorias|productos/.test(error.message) && /exist|schema cache/.test(error.message)) {
     return 'Falta ejecutar 006_menu_y_mesas.sql en Supabase.';
@@ -55,10 +48,19 @@ const mensajeError = (error: { message: string }) => {
   return error.message;
 };
 
+// Supabase no da error cuando no cambia ninguna fila (sin permiso, o ya la borraron en otro
+// dispositivo): se revisa que sí se haya cambiado algo para no decir "guardado" sin guardar
+const revisarResultado = ({ data, error }: { data: unknown[] | null; error: { message: string } | null }) => {
+  if (error) throw new Error(mensajeError(error));
+  if (!data || data.length === 0) {
+    throw new Error('No se guardó el cambio: ya no existe (quizás lo borraron en otro dispositivo) o su usuario no tiene permiso.');
+  }
+};
+
 // ---------- Menú ----------
 
 export const cargarMenu = async (): Promise<Categoria[]> => {
-  const client = getClient();
+  const client = clienteSupabase();
   const [categorias, productos] = await Promise.all([
     client.from('categorias').select('id, nombre, icono, orden').order('orden').order('id'),
     client.from('productos')
@@ -76,39 +78,37 @@ export const cargarMenu = async (): Promise<Categoria[]> => {
 };
 
 export const crearCategoria = async (nombre: string, icono: string, orden: number) => {
-  const { error } = await getClient().from('categorias').insert({ nombre, icono, orden });
+  const { error } = await clienteSupabase().from('categorias').insert({ nombre, icono, orden });
   if (error) throw new Error(mensajeError(error));
 };
 
 export const actualizarCategoria = async (id: number, cambios: Partial<Pick<Categoria, 'nombre' | 'icono' | 'orden'>>) => {
-  const { error } = await getClient().from('categorias').update(cambios).eq('id', id);
-  if (error) throw new Error(mensajeError(error));
+  revisarResultado(await clienteSupabase().from('categorias').update(cambios).eq('id', id).select('id'));
 };
 
 // Borra la categoría y todos sus productos
 export const borrarCategoria = async (id: number) => {
-  const { error } = await getClient().from('categorias').delete().eq('id', id);
-  if (error) throw new Error(mensajeError(error));
+  revisarResultado(await clienteSupabase().from('categorias').delete().eq('id', id).select('id'));
 };
 
 export type DatosProducto = Omit<Producto, 'id'>;
 
 export const crearProducto = async (producto: DatosProducto) => {
-  const { error } = await getClient().from('productos').insert(producto);
+  const { error } = await clienteSupabase().from('productos').insert(producto);
   if (error) throw new Error(mensajeError(error));
 };
 
+// Guarda solo los campos que se cambiaron, para no deshacer lo que otro dispositivo cambió en los demás
 export const actualizarProducto = async (id: number, cambios: Partial<DatosProducto>) => {
-  const { error } = await getClient()
+  revisarResultado(await clienteSupabase()
     .from('productos')
     .update({ ...cambios, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw new Error(mensajeError(error));
+    .eq('id', id)
+    .select('id'));
 };
 
 export const borrarProducto = async (id: number) => {
-  const { error } = await getClient().from('productos').delete().eq('id', id);
-  if (error) throw new Error(mensajeError(error));
+  revisarResultado(await clienteSupabase().from('productos').delete().eq('id', id).select('id'));
 };
 
 // ---------- Mesas ----------

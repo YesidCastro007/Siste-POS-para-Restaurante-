@@ -5,11 +5,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginScreen from './login/LoginScreen';
 import MeseroDashboard from './mesero/MeseroDashboard';
 import CajeraDashboard from './cajera/CajeraDashboard';
-import DueñoDashboard from './dueno/DuenoDashboard';
-import { isValidEmail, iniciarSesion, sesionActual, cerrarSesion, registrarMesero, enviarEnlaceRecuperacion, sesionRecuperacionLista, cambiarContrasena, abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido } from '@/lib/auth';
+import DuenoDashboard from './dueno/DuenoDashboard';
+import {
+  isValidEmail, iniciarSesion, sesionActual, cerrarSesion, registrarMesero, enviarEnlaceRecuperacion, sesionRecuperacionLista,
+  cambiarContrasena, abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido, perfilDeLaSesion, alCerrarseLaSesion,
+  CREDENCIALES_INCORRECTAS, type Usuario
+} from '@/lib/auth';
+import { iconoShadow } from '@/components/marca/Marca';
 
-export default function SantandereanoSystem() {
-  const [currentUser, setCurrentUser] = useState(null);
+const NOMBRE_ROL = { mesero: 'Mesero', cajera: 'Cajera', dueño: 'Dueño' };
+
+// Cada cuánto se revisa que la cuenta siga activa y con el mismo rol
+const REVISAR_PERFIL_MS = 60000;
+
+export default function SistemaPOS() {
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
+  // Mientras se recupera la sesión guardada no se muestra el login (evita verlo un instante al recargar)
+  const [restaurando, setRestaurando] = useState(!abiertoDesdeEnlaceRecuperacion && !enlaceRecuperacionInvalido);
+  const [errorRestaurando, setErrorRestaurando] = useState('');
+  const saliendo = React.useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('mesero');
@@ -43,35 +57,17 @@ export default function SantandereanoSystem() {
       alert('El enlace de recuperación expiró o ya se usó. Solicite uno nuevo.');
       window.history.replaceState(null, '', window.location.pathname);
     } else {
-      sesionActual().then((usuario) => {
-        if (usuario) setCurrentUser(usuario);
-      });
+      restaurarSesion();
     }
 
     // Verificar bloqueo existente
-    const blockUntil = localStorage.getItem('block_until');
+    const blockUntil = parseInt(localStorage.getItem('block_until') ?? '');
     const attempts = localStorage.getItem('login_attempts');
-    
+
     if (blockUntil) {
-      const timeLeft = Math.ceil((parseInt(blockUntil) - Date.now()) / 1000);
-      if (timeLeft > 0) {
-        setIsBlocked(true);
-        setBlockTimeLeft(timeLeft);
+      if (blockUntil > Date.now()) {
         setLoginAttempts(parseInt(attempts) || 0);
-        
-        const countdown = setInterval(() => {
-          const newTimeLeft = Math.ceil((parseInt(blockUntil) - Date.now()) / 1000);
-          if (newTimeLeft <= 0) {
-            setIsBlocked(false);
-            setBlockTimeLeft(0);
-            setLoginAttempts(0);
-            localStorage.removeItem('login_attempts');
-            localStorage.removeItem('block_until');
-            clearInterval(countdown);
-          } else {
-            setBlockTimeLeft(newTimeLeft);
-          }
-        }, 1000);
+        bloquearHasta(blockUntil);
       } else {
         localStorage.removeItem('block_until');
         localStorage.removeItem('login_attempts');
@@ -80,6 +76,80 @@ export default function SantandereanoSystem() {
       setLoginAttempts(parseInt(attempts));
     }
   }, []);
+
+  const restaurarSesion = async () => {
+    setRestaurando(true);
+    setErrorRestaurando('');
+    try {
+      const usuario = await sesionActual();
+      if (usuario) setCurrentUser(usuario);
+      setRestaurando(false);
+    } catch (error) {
+      // Sin internet no se cierra la sesión: se ofrece reintentar
+      setErrorRestaurando(error.message);
+    }
+  };
+
+  // Mientras hay alguien dentro: si la sesión se cierra sola, o el dueño desactiva la cuenta
+  // o le cambia el rol, la app lo nota sin esperar a que la persona recargue
+  const idUsuario = currentUser?.id;
+  const usuarioRef = React.useRef(currentUser);
+  usuarioRef.current = currentUser;
+  React.useEffect(() => {
+    if (!idUsuario) return;
+    saliendo.current = false;
+    const sacar = (mensaje: string) => {
+      if (saliendo.current) return;
+      saliendo.current = true;
+      setCurrentUser(null);
+      cerrarSesion();
+      alert(mensaje);
+    };
+    const dejarDeEscuchar = alCerrarseLaSesion(() => sacar('Su sesión se cerró. Inicie sesión de nuevo.'));
+    const revisar = async () => {
+      if (document.hidden) return;
+      let perfil: Usuario | null;
+      try {
+        perfil = await perfilDeLaSesion();
+      } catch {
+        return; // sin internet: se revisa en la próxima vuelta
+      }
+      if (!perfil) sacar('Su sesión se cerró. Inicie sesión de nuevo.');
+      else if (!perfil.active) sacar('Su cuenta fue desactivada por el dueño.');
+      else {
+        const actual = usuarioRef.current;
+        if (!actual || (actual.role === perfil.role && actual.name === perfil.name)) return;
+        setCurrentUser(perfil);
+        if (actual.role !== perfil.role) alert(`El dueño cambió su rol a ${NOMBRE_ROL[perfil.role] ?? perfil.role}.`);
+      }
+    };
+    const intervalo = setInterval(revisar, REVISAR_PERFIL_MS);
+    window.addEventListener('focus', revisar);
+    return () => {
+      dejarDeEscuchar();
+      clearInterval(intervalo);
+      window.removeEventListener('focus', revisar);
+    };
+  }, [idUsuario]);
+
+  // Bloqueo del login por intentos fallidos, con cuenta regresiva
+  const bloquearHasta = (hasta: number) => {
+    setIsBlocked(true);
+    setBlockTimeLeft(Math.ceil((hasta - Date.now()) / 1000));
+    const countdown = setInterval(() => {
+      const timeLeft = Math.ceil((hasta - Date.now()) / 1000);
+      if (timeLeft <= 0) {
+        setIsBlocked(false);
+        setBlockTimeLeft(0);
+        setLoginAttempts(0);
+        localStorage.removeItem('login_attempts');
+        localStorage.removeItem('block_until');
+        clearInterval(countdown);
+      } else {
+        setBlockTimeLeft(timeLeft);
+      }
+    }, 1000);
+  };
 
   const handleLogin = async () => {
     if (isBlocked) {
@@ -113,6 +183,9 @@ export default function SantandereanoSystem() {
       setLoginAttempts(0);
       localStorage.removeItem('login_attempts');
       localStorage.removeItem('block_until');
+    } else if (mensajeError !== CREDENCIALES_INCORRECTAS) {
+      // Sin internet, cuenta inactiva o sin confirmar: no cuenta como intento fallido
+      alert(mensajeError);
     } else {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
@@ -120,27 +193,11 @@ export default function SantandereanoSystem() {
       
       if (newAttempts >= 3) {
         const blockUntil = Date.now() + 30000;
-        setIsBlocked(true);
-        setBlockTimeLeft(30);
         localStorage.setItem('block_until', blockUntil.toString());
-        
-        const countdown = setInterval(() => {
-          const timeLeft = Math.ceil((blockUntil - Date.now()) / 1000);
-          if (timeLeft <= 0) {
-            setIsBlocked(false);
-            setBlockTimeLeft(0);
-            setLoginAttempts(0);
-            localStorage.removeItem('login_attempts');
-            localStorage.removeItem('block_until');
-            clearInterval(countdown);
-          } else {
-            setBlockTimeLeft(timeLeft);
-          }
-        }, 1000);
-        
+        bloquearHasta(blockUntil);
         alert('Demasiados intentos fallidos. Cuenta bloqueada por 30 segundos.');
       } else {
-        alert(`${mensajeError.replace(/\.$/, '')}. Intentos restantes: ${3 - newAttempts}`);
+        alert(`${mensajeError}. Intentos restantes: ${3 - newAttempts}`);
       }
     }
     
@@ -221,12 +278,40 @@ export default function SantandereanoSystem() {
   };
 
   const handleLogout = () => {
+    saliendo.current = true;
     setCurrentUser(null);
     setEmail('');
     setPassword('');
     setRole('mesero');
     cerrarSesion();
   };
+
+  if (!currentUser && restaurando) {
+    return (
+      <div className="min-h-screen fondo-shadow flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <img src={iconoShadow} alt="" className="w-16 h-16 mx-auto brillo-cian" />
+          {errorRestaurando ? (
+            <>
+              <p className="text-white">{errorRestaurando}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={restaurarSesion} className="boton-marca">Reintentar</Button>
+                <Button
+                  onClick={() => { setRestaurando(false); cerrarSesion(); }}
+                  variant="outline"
+                  className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  Ir al inicio de sesión
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-slate-300">Cargando…</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginScreen 
@@ -273,7 +358,7 @@ export default function SantandereanoSystem() {
   }
 
   if (currentUser.role === 'dueño') {
-    return <DueñoDashboard user={currentUser} onLogout={handleLogout} />;
+    return <DuenoDashboard user={currentUser} onLogout={handleLogout} />;
   }
 
   return (

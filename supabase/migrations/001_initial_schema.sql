@@ -1,3 +1,10 @@
+-- ⚠️ OBSOLETO: NO EJECUTAR.
+-- Este fue el primer esquema, con usuarios y contraseñas propios y la política "Permitir todo"
+-- (cualquiera con la clave pública podía leer y escribir). Las tablas se crean ahora en
+-- 003_datos_compartidos.sql y la seguridad en 005_robustez.sql y 007_permisos_por_rol.sql.
+-- Se deja como historial, dentro de un comentario, para que ejecutarlo por error no haga nada.
+
+/*
 -- Tabla de usuarios
 CREATE TABLE IF NOT EXISTS users (
   email TEXT PRIMARY KEY,
@@ -54,3 +61,4 @@ CREATE POLICY "Permitir todo" ON users FOR ALL USING (true);
 CREATE POLICY "Permitir todo" ON mesas FOR ALL USING (true);
 CREATE POLICY "Permitir todo" ON ventas FOR ALL USING (true);
 CREATE POLICY "Permitir todo" ON config FOR ALL USING (true);
+*/

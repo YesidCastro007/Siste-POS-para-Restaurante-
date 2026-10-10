@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { clienteSupabase, supabase } from '@/lib/supabase';
 
 // Datos compartidos del restaurante (mesas, ventas y configuración) guardados en Supabase,
 // para que todos los dispositivos vean lo mismo. Ver supabase/migrations/003_datos_compartidos.sql.
@@ -13,19 +13,17 @@ export interface Venta {
   pedidos: unknown[];
   total: number;
   metodoPago: string;
+  montoPagado?: number | null;
+  cambio?: number | null;
+  notaAdicional?: string | null;
+  // Hora del servidor en que se guardó (created_at)
+  creadaEn?: string | null;
 }
-
-const getClient = () => {
-  if (!supabase) {
-    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
-  }
-  return supabase;
-};
 
 // ---------- Mesas ----------
 
 export const cargarMesas = async (): Promise<Mesas> => {
-  const { data, error } = await getClient().from('mesas').select('mesa_key, data');
+  const { data, error } = await clienteSupabase().from('mesas').select('mesa_key, data');
   if (error) throw new Error(error.message);
   return Object.fromEntries((data ?? []).map(fila => [fila.mesa_key, fila.data]));
 };
@@ -37,13 +35,23 @@ export const guardarCambiosMesas = async (anteriores: Mesas, nuevas: Mesas) => {
     .filter(([key, mesa]) => JSON.stringify(anteriores[key]) !== JSON.stringify(mesa))
     .map(([key, mesa]) => ({ mesa_key: key, data: mesa, updated_at: new Date().toISOString() }));
   if (cambiadas.length === 0) return;
-  const { error } = await getClient().from('mesas').upsert(cambiadas);
+  const { error } = await clienteSupabase().from('mesas').upsert(cambiadas);
   if (error) throw new Error(error.message);
 };
 
 export const liberarMesa = async (mesaKey: string) => {
-  const { error } = await getClient().from('mesas').delete().eq('mesa_key', mesaKey);
+  const { error } = await clienteSupabase().from('mesas').delete().eq('mesa_key', mesaKey);
   if (error) throw new Error(error.message);
+};
+
+// Libera una mesa ya cobrada solo si sigue siendo el mismo pedido (misma fecha de creación).
+// Se usa al reintentar: si mientras tanto alguien abrió un pedido nuevo en esa mesa, no se borra.
+export const liberarMesaCobrada = async (mesaKey: string, fechaCreacion?: string) => {
+  const { data, error } = await clienteSupabase().from('mesas').select('data').eq('mesa_key', mesaKey).maybeSingle();
+  if (error) throw new Error(error.message);
+  const mesa = data?.data as { fechaCreacion?: string } | undefined;
+  if (!mesa || mesa.fechaCreacion !== fechaCreacion) return;
+  await liberarMesa(mesaKey);
 };
 
 // ---------- Ventas ----------
@@ -51,36 +59,88 @@ export const liberarMesa = async (mesaKey: string) => {
 // Supabase entrega como máximo 1.000 filas por consulta, así que las ventas se piden por páginas.
 const VENTAS_POR_PAGINA = 1000;
 
-// Carga las ventas desde una fecha (o todas si desde es null), de la más nueva a la más vieja.
-// Pedir solo el periodo que se muestra evita descargar toda la historia en cada actualización.
-export const cargarVentas = async (desde: Date | null = null): Promise<Venta[]> => {
-  const filas = [];
+type ConsultaVentas = ReturnType<ReturnType<ReturnType<typeof clienteSupabase>['from']>['select']>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FilaVenta = Record<string, any>;
+
+const aVenta = (fila: FilaVenta): Venta => ({
+  id: Number(fila.id),
+  fecha: fila.fecha,
+  mesa: fila.mesa,
+  mesero: fila.mesero,
+  pedidos: fila.pedidos,
+  total: fila.total,
+  metodoPago: fila.metodo_pago,
+  montoPagado: fila.monto_pagado ?? null,
+  cambio: fila.cambio ?? null,
+  notaAdicional: fila.nota_adicional ?? null,
+  creadaEn: fila.created_at ?? null
+});
+
+// De la más nueva a la más vieja
+const porFechaDescendente = (a: Venta, b: Venta) => b.fecha.localeCompare(a.fecha) || b.id - a.id;
+
+const traerVentas = async (filtrar: (consulta: ConsultaVentas) => ConsultaVentas): Promise<Venta[]> => {
+  const filas: FilaVenta[] = [];
+  const vistas = new Set<number>();
   for (let pagina = 0; ; pagina++) {
-    let consulta = getClient()
-      .from('ventas')
-      .select('id, fecha, mesa, mesero, pedidos, total, metodo_pago')
+    const consulta = filtrar(clienteSupabase().from('ventas').select('*'))
       .order('fecha', { ascending: false })
       .order('id', { ascending: false })
       .range(pagina * VENTAS_POR_PAGINA, (pagina + 1) * VENTAS_POR_PAGINA - 1);
-    if (desde) consulta = consulta.gte('fecha', desde.toISOString());
     const { data, error } = await consulta;
     if (error) throw new Error(error.message);
-    filas.push(...(data ?? []));
+    // Si entra una venta nueva mientras se descargan las páginas, la última de una página
+    // se repite al inicio de la siguiente: se cuenta una sola vez
+    ((data ?? []) as FilaVenta[]).forEach(fila => {
+      if (vistas.has(Number(fila.id))) return;
+      vistas.add(Number(fila.id));
+      filas.push(fila);
+    });
     if (!data || data.length < VENTAS_POR_PAGINA) break;
   }
-  return filas.map(fila => ({
-    id: Number(fila.id),
-    fecha: fila.fecha,
-    mesa: fila.mesa,
-    mesero: fila.mesero,
-    pedidos: fila.pedidos,
-    total: fila.total,
-    metodoPago: fila.metodo_pago
-  }));
+  return filas.map(aVenta);
 };
 
+// Carga las ventas desde una fecha (o todas si desde es null), de la más nueva a la más vieja.
+// Pedir solo el periodo que se muestra evita descargar toda la historia en cada actualización.
+export const cargarVentas = (desde: Date | null = null) =>
+  traerVentas(consulta => (desde ? consulta.gte('fecha', desde.toISOString()) : consulta));
+
+// Para pantallas que se actualizan solas. Las ventas no se modifican ni se borran, así que
+// después de la primera carga de un periodo solo se piden las que el servidor registró desde
+// la última vez (con un minuto de margen, sin repetir), en vez de descargar todo otra vez.
+export const crearCargadorDeVentas = () => {
+  let desdeCargado: number | null | undefined;
+  let ventas: Venta[] = [];
+  return async (desde: Date | null): Promise<Venta[]> => {
+    const clave = desde ? desde.getTime() : null;
+    const ultima = ventas.reduce((max, v) => (v.creadaEn && v.creadaEn > max ? v.creadaEn : max), '');
+    if (clave !== desdeCargado || !ultima) {
+      const todas = await cargarVentas(desde);
+      ventas = todas;
+      desdeCargado = clave;
+      return todas;
+    }
+    const margen = new Date(new Date(ultima).getTime() - 60000).toISOString();
+    const nuevas = await traerVentas(consulta => {
+      const recientes = consulta.gte('created_at', margen);
+      return desde ? recientes.gte('fecha', desde.toISOString()) : recientes;
+    });
+    // Mientras tanto se pidió otro periodo: esta respuesta ya no sirve
+    if (desdeCargado !== clave) return ventas;
+    const ids = new Set(ventas.map(v => v.id));
+    const agregadas = nuevas.filter(v => !ids.has(v.id));
+    if (agregadas.length > 0) ventas = [...agregadas, ...ventas].sort(porFechaDescendente);
+    return ventas;
+  };
+};
+
+// Guarda la venta. Si el cobro se envía dos veces (doble toque, o se reintenta porque la
+// respuesta no llegó), la venta ya guardada con ese mismo número no se repite.
 export const registrarVenta = async (venta: Venta) => {
-  const { error } = await getClient().from('ventas').insert({
+  const fila = {
     id: venta.id,
     fecha: venta.fecha,
     mesa: venta.mesa,
@@ -88,20 +148,35 @@ export const registrarVenta = async (venta: Venta) => {
     pedidos: venta.pedidos,
     total: venta.total,
     metodo_pago: venta.metodoPago
-  });
-  if (error) throw new Error(error.message);
+  };
+  const extras = {
+    monto_pagado: venta.montoPagado ?? null,
+    cambio: venta.cambio ?? null,
+    nota_adicional: venta.notaAdicional?.trim() || null
+  };
+  let { error } = await clienteSupabase().from('ventas').insert({ ...fila, ...extras });
+  // Bases creadas sin las columnas del pago: se guarda la venta sin ellas
+  if (error?.code === 'PGRST204') ({ error } = await clienteSupabase().from('ventas').insert(fila));
+  if (!error) return;
+  if (error.code !== '23505') throw new Error(error.message);
+  const { data, error: errorLectura } = await clienteSupabase()
+    .from('ventas').select('mesa, total').eq('id', venta.id).maybeSingle();
+  if (errorLectura || !data) throw new Error(errorLectura?.message ?? error.message);
+  if (data.mesa === venta.mesa && data.total === venta.total) return;
+  // Otro cobro tomó el mismo número en el mismo milisegundo: se guarda con el siguiente
+  return registrarVenta({ ...venta, id: venta.id + 1 });
 };
 
-// ---------- Configuración (sabores de sopa, precio, caja, WhatsApp, cierres) ----------
+// ---------- Configuración (zonas, nombre del negocio, caja, WhatsApp, cierres) ----------
 
 export const leerConfig = async <T>(key: string, valorPorDefecto: T): Promise<T> => {
-  const { data, error } = await getClient().from('config').select('value').eq('key', key).maybeSingle();
+  const { data, error } = await clienteSupabase().from('config').select('value').eq('key', key).maybeSingle();
   if (error) throw new Error(error.message);
   return data ? (data.value as T) : valorPorDefecto;
 };
 
 export const guardarConfig = async (key: string, value: unknown) => {
-  const { error } = await getClient()
+  const { error } = await clienteSupabase()
     .from('config')
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
@@ -121,12 +196,38 @@ export const escucharCambios = (tablas: string[], alCambiar: () => void) => {
   return () => { client.removeChannel(canal); };
 };
 
+// Si se pide cargar mientras otra carga sigue en curso, se hace una sola carga más al terminar.
+// Así, con internet lento, las cargas no se amontonan ni se cancelan entre sí.
+const sinAmontonar = (cargar: () => unknown) => {
+  let enCurso = false;
+  let otraVez = false;
+  const ejecutar = async () => {
+    if (enCurso) {
+      otraVez = true;
+      return;
+    }
+    enCurso = true;
+    try {
+      await cargar();
+    } finally {
+      enCurso = false;
+      if (otraVez) {
+        otraVez = false;
+        ejecutar();
+      }
+    }
+  };
+  return ejecutar;
+};
+
 // Mantiene los datos al día: carga al entrar, con cada cambio en vivo, cada pocos segundos
-// como respaldo, y al volver a la pestaña (los celulares pausan las pestañas en segundo plano).
-export const mantenerActualizado = (tablas: string[], cargar: () => void, cadaMs = 5000) => {
+// como respaldo (solo con la pantalla visible), y al volver a la pestaña
+// (los celulares pausan las pestañas en segundo plano).
+export const mantenerActualizado = (tablas: string[], cargarDatos: () => unknown, cadaMs = 5000) => {
+  const cargar = sinAmontonar(cargarDatos);
   cargar();
   const dejarDeEscuchar = escucharCambios(tablas, cargar);
-  const intervalo = setInterval(cargar, cadaMs);
+  const intervalo = setInterval(() => { if (!document.hidden) cargar(); }, cadaMs);
   const alVolver = () => { if (!document.hidden) cargar(); };
   document.addEventListener('visibilitychange', alVolver);
   window.addEventListener('focus', cargar);

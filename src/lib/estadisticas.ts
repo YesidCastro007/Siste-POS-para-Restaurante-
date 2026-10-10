@@ -102,4 +102,4 @@ export const ventasPorDia = (ventas: Venta[], dias: number, ahora = new Date()) 
   return filas;
 };
 
-export const formatoPesos = (valor: number) => `$${Math.round(valor).toLocaleString('es-CO')}`;
+export { pesos as formatoPesos } from '@/lib/formato';

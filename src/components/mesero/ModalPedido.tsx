@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UtensilsCrossed, X, Trash2, Plus, Minus, Send, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Categoria, Producto } from '@/lib/menu';
-import { type ItemPedido, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
+import { type ItemPedido, type Mesa, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
+import { pesos, miles } from '@/lib/formato';
 
 // Colores de las categorías, en orden
 const COLORES = [
@@ -22,30 +23,35 @@ const COLORES = [
 
 type Elegidas = Record<string, string | string[]>;
 
-interface Mesa {
-  pedidos: ItemPedido[];
-  total: number;
-  mesero: string;
-  fechaCreacion?: string;
-  fechaActualizacion?: string;
-}
-
 // Producto que necesita que el mesero escoja algo antes de agregarlo
 const necesitaConfigurar = (p: Producto) => p.precio_libre || p.opciones.length > 0;
 
-export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, onCerrar, onAbrirCobro, user, menu }: {
+export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa, onCerrar, onAbrirCobro, user, menu }: {
   zona: { numero: number; nombre: string };
   mesaSeleccionada: number;
   mesas: Record<string, Mesa>;
-  setMesas: (mesas: Record<string, Mesa>) => void;
+  guardarMesa: (mesaKey: string, mesa: Mesa) => Promise<boolean>;
   onCerrar: () => void;
   onAbrirCobro: () => void;
-  user: { name: string };
+  user: { id?: string; name: string };
   menu: Categoria[];
 }) {
   const mesaKey = `${zona.numero}-${mesaSeleccionada}`;
-  const mesaData = mesas[mesaKey] || { pedidos: [], total: 0, mesero: user.name };
-  const [pedidos, setPedidos] = useState<ItemPedido[]>(mesaData.pedidos || []);
+  // Pedido de la mesa tal como está guardado (se actualiza cuando otro dispositivo lo cambia)
+  const pedidosGuardados = JSON.stringify(mesas[mesaKey]?.pedidos || []);
+  const [pedidos, setPedidos] = useState<ItemPedido[]>(() => JSON.parse(pedidosGuardados));
+  // Pedido guardado en el momento en que se empezó a editar
+  const [base, setBase] = useState(pedidosGuardados);
+  const hayCambios = JSON.stringify(pedidos) !== base;
+  const [guardando, setGuardando] = useState(false);
+
+  // Mientras el mesero no haya cambiado nada, se muestra lo último que hay guardado en la mesa
+  useEffect(() => {
+    if (hayCambios || pedidosGuardados === base) return;
+    setPedidos(JSON.parse(pedidosGuardados));
+    setBase(pedidosGuardados);
+  }, [hayCambios, pedidosGuardados, base]);
+
   // Se muestran todas las categorías, también las nuevas que aún no tienen productos
   const categorias = menu;
   const [categoriaId, setCategoriaId] = useState<number | null>(categorias[0]?.id ?? null);
@@ -131,21 +137,51 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
     setPedidos(pedidos.map(p => p.id === id ? { ...p, cantidad: nuevaCantidad } : p));
   };
 
-  const guardarEnMesa = () => {
-    setMesas({
-      ...mesas,
-      [mesaKey]: {
-        pedidos,
-        total: totalPedidos(pedidos),
-        mesero: user.name,
-        fechaCreacion: mesaData.fechaCreacion || new Date().toISOString(),
-        fechaActualizacion: new Date().toISOString()
+  // Guarda el pedido en la mesa. Devuelve true si quedó guardado (o si no había nada que guardar).
+  const guardarEnMesa = async () => {
+    if (guardando) return false;
+    const actual = mesas[mesaKey];
+    if (!hayCambios || (pedidos.length === 0 && !actual)) return true;
+
+    // Otro dispositivo cambió la mesa mientras este pedido estaba abierto
+    if (JSON.stringify(actual?.pedidos || []) !== base) {
+      const reemplazar = confirm(actual
+        ? 'Mientras usted editaba, otro dispositivo cambió el pedido de esta mesa.\n\nAceptar: guardar su versión (reemplaza la otra).\nCancelar: ver el pedido actualizado.'
+        : 'Mientras usted editaba, esta mesa se cobró o se liberó en otro dispositivo.\n\nAceptar: guardar este pedido como un pedido nuevo.\nCancelar: descartarlo.');
+      if (!reemplazar) {
+        setPedidos(actual?.pedidos || []);
+        setBase(JSON.stringify(actual?.pedidos || []));
+        return false;
       }
+    }
+
+    if (pedidos.length === 0 && !confirm('¿Dejar esta mesa sin productos? Quedará libre.')) return false;
+
+    setGuardando(true);
+    const guardado = await guardarMesa(mesaKey, {
+      pedidos,
+      total: totalPedidos(pedidos),
+      // La mesa sigue siendo del mesero que la abrió, aunque otro le agregue productos
+      mesero: actual?.mesero || user.name,
+      meseroId: actual ? actual.meseroId : user.id,
+      fechaCreacion: actual?.fechaCreacion || new Date().toISOString(),
+      fechaActualizacion: new Date().toISOString()
     });
+    setGuardando(false);
+    if (guardado) setBase(JSON.stringify(pedidos));
+    return guardado;
   };
 
-  const guardarPedido = () => {
-    guardarEnMesa();
+  const guardarPedido = async () => {
+    if (await guardarEnMesa()) onCerrar();
+  };
+
+  const guardarYCobrar = async () => {
+    if (await guardarEnMesa()) onAbrirCobro();
+  };
+
+  const cerrar = () => {
+    if (hayCambios && !confirm('Hay cambios sin guardar en este pedido. ¿Salir sin guardarlos?')) return;
     onCerrar();
   };
 
@@ -167,8 +203,9 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                 <p className="text-cyan-300 text-xs sm:text-sm">{zona.nombre} • {user.name}</p>
               </div>
             </div>
-            <Button
-              onClick={onCerrar}
+            <Button aria-label="Cerrar"
+              onClick={cerrar}
+              disabled={guardando}
               variant="outline"
               size="sm"
               className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-200"
@@ -229,7 +266,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                       >
                         <span className="font-medium truncate">{producto.nombre}</span>
                         <span className="text-green-400 font-bold ml-2 shrink-0">
-                          {!producto.disponible ? 'Agotado' : producto.precio_libre ? 'Precio libre' : `$${producto.precio.toLocaleString()}`}
+                          {!producto.disponible ? 'Agotado' : producto.precio_libre ? 'Precio libre' : pesos(producto.precio)}
                         </span>
                       </Button>
                     ))}
@@ -248,7 +285,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                       onClick={() => setConfigurando(null)}
                       variant="outline"
                       size="sm"
-                      className="bg-transparent border-red-500/50 text-gray-300 hover:bg-white/10"
+                      className="bg-transparent border-white/20 text-gray-300 hover:bg-white/10"
                     >
                       Volver
                     </Button>
@@ -288,7 +325,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                         <Input
                           type="text"
                           inputMode="numeric"
-                          value={precioLibre ? parseInt(precioLibre).toLocaleString() : ''}
+                          value={precioLibre ? miles(parseInt(precioLibre)) : ''}
                           onChange={(e) => setPrecioLibre(e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="Ej: 25.000"
                           className="bg-white/5 border-cyan-400/20 text-white h-10 sm:h-12 text-sm"
@@ -296,7 +333,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                       </div>
                     ) : (
                       <div className="flex items-end">
-                        <p className="text-green-400 font-bold text-lg">${configurando.precio.toLocaleString()}</p>
+                        <p className="text-green-400 font-bold text-lg">{pesos(configurando.precio)}</p>
                       </div>
                     )}
                     <div className="flex items-end">
@@ -321,7 +358,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                 <div className="flex items-center justify-between">
                   <h3 className="text-base sm:text-lg font-semibold text-white">Pedido Actual</h3>
                   <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs">
-                    {pedidos.length} items
+                    {pedidos.length} {pedidos.length === 1 ? 'producto' : 'productos'}
                   </Badge>
                 </div>
 
@@ -329,7 +366,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   {pedidos.length === 0 ? (
                     <div className="text-center py-8 sm:py-12">
                       <UtensilsCrossed className="w-10 h-10 sm:w-12 sm:h-12 text-gray-500 mx-auto mb-2 sm:mb-3" />
-                      <p className="text-gray-400 text-sm">No hay items</p>
+                      <p className="text-gray-400 text-sm">Todavía no hay productos</p>
                     </div>
                   ) : (
                     pedidos.map((pedido) => (
@@ -346,9 +383,10 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                             onClick={() => eliminarPedido(pedido.id)}
                             variant="outline"
                             size="sm"
-                            className="w-8 h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                            aria-label={`Quitar ${nombreItem(pedido)}`}
+                            className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4 sm:w-3 sm:h-3" />
                           </Button>
                         </div>
                         
@@ -358,9 +396,10 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                               onClick={() => cambiarCantidad(pedido.id, pedido.cantidad - 1)}
                               variant="outline"
                               size="sm"
-                              className="w-8 h-8 p-0 border-red-500/50 text-red-400"
+                              aria-label={`Uno menos de ${nombreItem(pedido)}`}
+                              className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-red-500/50 text-red-400"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="w-4 h-4 sm:w-3 sm:h-3" />
                             </Button>
                             
                             <span className="text-white font-medium w-8 text-center">
@@ -371,14 +410,15 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                               onClick={() => cambiarCantidad(pedido.id, pedido.cantidad + 1)}
                               variant="outline"
                               size="sm"
-                              className="w-8 h-8 p-0 border-green-500/50 text-green-400"
+                              aria-label={`Uno más de ${nombreItem(pedido)}`}
+                              className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-green-500/50 text-green-400"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="w-4 h-4 sm:w-3 sm:h-3" />
                             </Button>
                           </div>
                           
                           <p className="text-green-400 font-bold text-sm">
-                            ${subtotal(pedido).toLocaleString()}
+                            {pesos(subtotal(pedido))}
                           </p>
                         </div>
                       </div>
@@ -392,25 +432,24 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, setMesas, o
                   <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-lg border border-green-500/30">
                     <span className="text-base sm:text-lg font-semibold text-white">Total:</span>
                     <span className="text-xl sm:text-2xl font-bold text-green-400">
-                      ${totalPedidos(pedidos).toLocaleString()}
+                      {pesos(totalPedidos(pedidos))}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:gap-3">
                     <Button
                       onClick={guardarPedido}
+                      disabled={guardando}
                       className="h-10 sm:h-12 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium text-sm sm:text-base"
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
-                      Guardar Pedido
+                      {guardando ? 'Guardando…' : 'Guardar Pedido'}
                     </Button>
                     
                     {pedidos.length > 0 && (
                       <Button
-                        onClick={() => {
-                          guardarEnMesa();
-                          onAbrirCobro();
-                        }}
+                        onClick={guardarYCobrar}
+                        disabled={guardando}
                         className="h-10 sm:h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium text-sm sm:text-base"
                       >
                         <Send className="w-4 h-4 mr-2" />
