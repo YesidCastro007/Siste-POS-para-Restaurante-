@@ -17,6 +17,16 @@ export interface ItemPedido {
   precio?: string | number;
 }
 
+// Una mesa ocupada, como se guarda en Supabase (tabla mesas, columna data)
+export interface Mesa {
+  pedidos: ItemPedido[];
+  total: number;
+  mesero: string;
+  meseroId?: string;
+  fechaCreacion?: string;
+  fechaActualizacion?: string;
+}
+
 const CATEGORIA_POR_TIPO: Record<string, string> = {
   picada: 'Picadas',
   gallina: 'Gallina',

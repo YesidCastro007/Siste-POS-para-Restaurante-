@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { clienteSupabase, supabase } from '@/lib/supabase';
 
 // Datos compartidos del restaurante (mesas, ventas y configuración) guardados en Supabase,
 // para que todos los dispositivos vean lo mismo. Ver supabase/migrations/003_datos_compartidos.sql.
@@ -20,17 +20,10 @@ export interface Venta {
   creadaEn?: string | null;
 }
 
-const getClient = () => {
-  if (!supabase) {
-    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
-  }
-  return supabase;
-};
-
 // ---------- Mesas ----------
 
 export const cargarMesas = async (): Promise<Mesas> => {
-  const { data, error } = await getClient().from('mesas').select('mesa_key, data');
+  const { data, error } = await clienteSupabase().from('mesas').select('mesa_key, data');
   if (error) throw new Error(error.message);
   return Object.fromEntries((data ?? []).map(fila => [fila.mesa_key, fila.data]));
 };
@@ -42,19 +35,19 @@ export const guardarCambiosMesas = async (anteriores: Mesas, nuevas: Mesas) => {
     .filter(([key, mesa]) => JSON.stringify(anteriores[key]) !== JSON.stringify(mesa))
     .map(([key, mesa]) => ({ mesa_key: key, data: mesa, updated_at: new Date().toISOString() }));
   if (cambiadas.length === 0) return;
-  const { error } = await getClient().from('mesas').upsert(cambiadas);
+  const { error } = await clienteSupabase().from('mesas').upsert(cambiadas);
   if (error) throw new Error(error.message);
 };
 
 export const liberarMesa = async (mesaKey: string) => {
-  const { error } = await getClient().from('mesas').delete().eq('mesa_key', mesaKey);
+  const { error } = await clienteSupabase().from('mesas').delete().eq('mesa_key', mesaKey);
   if (error) throw new Error(error.message);
 };
 
 // Libera una mesa ya cobrada solo si sigue siendo el mismo pedido (misma fecha de creación).
 // Se usa al reintentar: si mientras tanto alguien abrió un pedido nuevo en esa mesa, no se borra.
 export const liberarMesaCobrada = async (mesaKey: string, fechaCreacion?: string) => {
-  const { data, error } = await getClient().from('mesas').select('data').eq('mesa_key', mesaKey).maybeSingle();
+  const { data, error } = await clienteSupabase().from('mesas').select('data').eq('mesa_key', mesaKey).maybeSingle();
   if (error) throw new Error(error.message);
   const mesa = data?.data as { fechaCreacion?: string } | undefined;
   if (!mesa || mesa.fechaCreacion !== fechaCreacion) return;
@@ -66,7 +59,7 @@ export const liberarMesaCobrada = async (mesaKey: string, fechaCreacion?: string
 // Supabase entrega como máximo 1.000 filas por consulta, así que las ventas se piden por páginas.
 const VENTAS_POR_PAGINA = 1000;
 
-type ConsultaVentas = ReturnType<ReturnType<ReturnType<typeof getClient>['from']>['select']>;
+type ConsultaVentas = ReturnType<ReturnType<ReturnType<typeof clienteSupabase>['from']>['select']>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FilaVenta = Record<string, any>;
@@ -92,7 +85,7 @@ const traerVentas = async (filtrar: (consulta: ConsultaVentas) => ConsultaVentas
   const filas: FilaVenta[] = [];
   const vistas = new Set<number>();
   for (let pagina = 0; ; pagina++) {
-    const consulta = filtrar(getClient().from('ventas').select('*'))
+    const consulta = filtrar(clienteSupabase().from('ventas').select('*'))
       .order('fecha', { ascending: false })
       .order('id', { ascending: false })
       .range(pagina * VENTAS_POR_PAGINA, (pagina + 1) * VENTAS_POR_PAGINA - 1);
@@ -161,12 +154,12 @@ export const registrarVenta = async (venta: Venta) => {
     cambio: venta.cambio ?? null,
     nota_adicional: venta.notaAdicional?.trim() || null
   };
-  let { error } = await getClient().from('ventas').insert({ ...fila, ...extras });
+  let { error } = await clienteSupabase().from('ventas').insert({ ...fila, ...extras });
   // Bases creadas sin las columnas del pago: se guarda la venta sin ellas
-  if (error?.code === 'PGRST204') ({ error } = await getClient().from('ventas').insert(fila));
+  if (error?.code === 'PGRST204') ({ error } = await clienteSupabase().from('ventas').insert(fila));
   if (!error) return;
   if (error.code !== '23505') throw new Error(error.message);
-  const { data, error: errorLectura } = await getClient()
+  const { data, error: errorLectura } = await clienteSupabase()
     .from('ventas').select('mesa, total').eq('id', venta.id).maybeSingle();
   if (errorLectura || !data) throw new Error(errorLectura?.message ?? error.message);
   if (data.mesa === venta.mesa && data.total === venta.total) return;
@@ -177,13 +170,13 @@ export const registrarVenta = async (venta: Venta) => {
 // ---------- Configuración (zonas, nombre del negocio, caja, WhatsApp, cierres) ----------
 
 export const leerConfig = async <T>(key: string, valorPorDefecto: T): Promise<T> => {
-  const { data, error } = await getClient().from('config').select('value').eq('key', key).maybeSingle();
+  const { data, error } = await clienteSupabase().from('config').select('value').eq('key', key).maybeSingle();
   if (error) throw new Error(error.message);
   return data ? (data.value as T) : valorPorDefecto;
 };
 
 export const guardarConfig = async (key: string, value: unknown) => {
-  const { error } = await getClient()
+  const { error } = await clienteSupabase()
     .from('config')
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);

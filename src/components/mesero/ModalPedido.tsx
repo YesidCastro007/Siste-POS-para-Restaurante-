@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Categoria, Producto } from '@/lib/menu';
-import { type ItemPedido, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
+import { type ItemPedido, type Mesa, nombreItem, detalleItem, subtotal, totalPedidos } from '@/lib/pedidos';
 import { pesos, miles } from '@/lib/formato';
 
 // Colores de las categorías, en orden
@@ -22,15 +22,6 @@ const COLORES = [
 ];
 
 type Elegidas = Record<string, string | string[]>;
-
-export interface Mesa {
-  pedidos: ItemPedido[];
-  total: number;
-  mesero: string;
-  meseroId?: string;
-  fechaCreacion?: string;
-  fechaActualizacion?: string;
-}
 
 // Producto que necesita que el mesero escoja algo antes de agregarlo
 const necesitaConfigurar = (p: Producto) => p.precio_libre || p.opciones.length > 0;
@@ -212,7 +203,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                 <p className="text-cyan-300 text-xs sm:text-sm">{zona.nombre} • {user.name}</p>
               </div>
             </div>
-            <Button
+            <Button aria-label="Cerrar"
               onClick={cerrar}
               disabled={guardando}
               variant="outline"
@@ -294,7 +285,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                       onClick={() => setConfigurando(null)}
                       variant="outline"
                       size="sm"
-                      className="bg-transparent border-red-500/50 text-gray-300 hover:bg-white/10"
+                      className="bg-transparent border-white/20 text-gray-300 hover:bg-white/10"
                     >
                       Volver
                     </Button>
@@ -367,7 +358,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                 <div className="flex items-center justify-between">
                   <h3 className="text-base sm:text-lg font-semibold text-white">Pedido Actual</h3>
                   <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs">
-                    {pedidos.length} items
+                    {pedidos.length} {pedidos.length === 1 ? 'producto' : 'productos'}
                   </Badge>
                 </div>
 
@@ -375,7 +366,7 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                   {pedidos.length === 0 ? (
                     <div className="text-center py-8 sm:py-12">
                       <UtensilsCrossed className="w-10 h-10 sm:w-12 sm:h-12 text-gray-500 mx-auto mb-2 sm:mb-3" />
-                      <p className="text-gray-400 text-sm">No hay items</p>
+                      <p className="text-gray-400 text-sm">Todavía no hay productos</p>
                     </div>
                   ) : (
                     pedidos.map((pedido) => (
@@ -392,9 +383,10 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                             onClick={() => eliminarPedido(pedido.id)}
                             variant="outline"
                             size="sm"
-                            className="w-8 h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                            aria-label={`Quitar ${nombreItem(pedido)}`}
+                            className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4 sm:w-3 sm:h-3" />
                           </Button>
                         </div>
                         
@@ -404,9 +396,10 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                               onClick={() => cambiarCantidad(pedido.id, pedido.cantidad - 1)}
                               variant="outline"
                               size="sm"
-                              className="w-8 h-8 p-0 border-red-500/50 text-red-400"
+                              aria-label={`Uno menos de ${nombreItem(pedido)}`}
+                              className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-red-500/50 text-red-400"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="w-4 h-4 sm:w-3 sm:h-3" />
                             </Button>
                             
                             <span className="text-white font-medium w-8 text-center">
@@ -417,9 +410,10 @@ export default function ModalPedido({ zona, mesaSeleccionada, mesas, guardarMesa
                               onClick={() => cambiarCantidad(pedido.id, pedido.cantidad + 1)}
                               variant="outline"
                               size="sm"
-                              className="w-8 h-8 p-0 border-green-500/50 text-green-400"
+                              aria-label={`Uno más de ${nombreItem(pedido)}`}
+                              className="w-9 h-9 sm:w-8 sm:h-8 p-0 border-green-500/50 text-green-400"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="w-4 h-4 sm:w-3 sm:h-3" />
                             </Button>
                           </div>
                           

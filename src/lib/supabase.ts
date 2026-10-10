@@ -28,4 +28,10 @@ export const supabase = supabaseUrl && supabaseKey
     })
   : null;
 
-export const isSupabaseEnabled = () => !!supabase;
+// El cliente de Supabase; si faltan las variables de entorno avisa con un mensaje claro
+export const clienteSupabase = () => {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
+  }
+  return supabase;
+};

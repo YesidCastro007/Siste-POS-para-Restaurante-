@@ -46,7 +46,7 @@ export default function ModalWhatsApp({ numeroActual, onGuardar, onCerrar }: {
               <MessageCircle className="w-6 h-6 mr-2 text-green-400" />
               Configurar WhatsApp
             </CardTitle>
-            <Button
+            <Button aria-label="Cerrar"
               onClick={onCerrar}
               variant="outline"
               size="sm"

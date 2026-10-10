@@ -81,7 +81,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
                 <p className="text-cyan-300 text-sm">Mesa {mesaSeleccionada} • {zonaNombre}</p>
               </div>
             </div>
-            <Button onClick={onCerrar} disabled={procesando} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
+            <Button aria-label="Cerrar" onClick={onCerrar} disabled={procesando} variant="outline" size="sm" className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -91,7 +91,7 @@ export default function ModalCobro({ zonaNombre, mesaSeleccionada, mesaData, onC
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-4 border border-cyan-400/15">
               <h3 className="text-white font-semibold mb-3 flex items-center">
-                <Receipt className="w-5 h-5 mr-2 text-red-400" />Resumen del Pedido
+                <Receipt className="w-5 h-5 mr-2 text-cyan-300" />Resumen del Pedido
               </h3>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {mesaData?.pedidos?.map((pedido, index) => (

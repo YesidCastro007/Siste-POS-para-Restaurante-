@@ -1,19 +1,5 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import SantandereanoSystem from "./components/SantandereanoSystem";
+import SistemaPOS from './components/SistemaPOS';
 
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <SantandereanoSystem />
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => <SistemaPOS />;
 
 export default App;

@@ -13,6 +13,12 @@ const texto = (valor: string) => valor
   .replace(/\s+/g, ' ')
   .trim();
 
+// Encabezado de las tablas con el azul de la marca SHADOW (#0F172A)
+const AZUL_MARCA: [number, number, number] = [15, 23, 42];
+
+// Dónde terminó la última tabla dibujada, para seguir escribiendo debajo
+const finDeLaTabla = (doc: jsPDF) => (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+
 export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -67,11 +73,11 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     head: [['Método', 'Monto', 'Porcentaje']],
     body: metodosPagoData,
     theme: 'grid',
-    headStyles: { fillColor: [220, 38, 38] },
+    headStyles: { fillColor: AZUL_MARCA },
     margin: { left: 14, right: 14 }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 10;
+  yPos = finDeLaTabla(doc) + 10;
   
   // Ventas por categorías
   doc.setFontSize(12);
@@ -93,11 +99,11 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
     head: [['Categoría', 'Cantidad', 'Ingresos', '%']],
     body: categoriasData,
     theme: 'grid',
-    headStyles: { fillColor: [220, 38, 38] },
+    headStyles: { fillColor: AZUL_MARCA },
     margin: { left: 14, right: 14 }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 10;
+  yPos = finDeLaTabla(doc) + 10;
   
   // Detalle por productos (nueva página si es necesario)
   if (yPos > 250) {
@@ -140,7 +146,7 @@ export const generarReportePDF = (reporte: ReporteCierre): jsPDF => {
         margin: { left: 20, right: 14 }
       });
       
-      yPos = (doc as any).lastAutoTable.finalY + 8;
+      yPos = finDeLaTabla(doc) + 8;
     }
   });
   

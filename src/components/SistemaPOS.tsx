@@ -18,7 +18,7 @@ const NOMBRE_ROL = { mesero: 'Mesero', cajera: 'Cajera', dueño: 'Dueño' };
 // Cada cuánto se revisa que la cuenta siga activa y con el mismo rol
 const REVISAR_PERFIL_MS = 60000;
 
-export default function SantandereanoSystem() {
+export default function SistemaPOS() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   // Mientras se recupera la sesión guardada no se muestra el login (evita verlo un instante al recargar)
   const [restaurando, setRestaurando] = useState(!abiertoDesdeEnlaceRecuperacion && !enlaceRecuperacionInvalido);

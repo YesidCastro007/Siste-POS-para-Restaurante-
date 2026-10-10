@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { clienteSupabase, supabase } from '@/lib/supabase';
 export { abiertoDesdeEnlaceRecuperacion, enlaceRecuperacionInvalido } from '@/lib/supabase';
 
 // Autenticación con Supabase Auth. Las contraseñas las guarda y verifica Supabase;
@@ -16,18 +16,11 @@ export interface Usuario {
 
 const PERFIL_COLUMNAS = 'id, email, name, role, active';
 
-const getClient = () => {
-  if (!supabase) {
-    throw new Error('Supabase no está configurado. Revise VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
-  }
-  return supabase;
-};
-
 const normalizarEmail = (email: string) => email.toLowerCase().trim();
 
 // Cierra la sesión solo en este dispositivo (sin "scope: local" se cerraría en todos los
 // dispositivos donde esa cuenta esté abierta)
-const salir = () => getClient().auth.signOut({ scope: 'local' });
+const salir = () => clienteSupabase().auth.signOut({ scope: 'local' });
 
 // Sin internet, Supabase responde "Failed to fetch" o un error de red
 const esErrorDeRed = (error: { message?: string; name?: string; status?: number }) =>
@@ -67,7 +60,7 @@ let usuariosCache: Usuario[] = [];
 export const getUsuariosCache = () => usuariosCache;
 
 export const cargarUsuarios = async () => {
-  const { data, error } = await getClient()
+  const { data, error } = await clienteSupabase()
     .from('profiles')
     .select(PERFIL_COLUMNAS)
     .order('created_at', { ascending: true });
@@ -82,7 +75,7 @@ export const cargarUsuarios = async () => {
 // Solo el dueño: cambia el rol (mesero o cajera) y el estado de otro usuario.
 // La base de datos verifica el permiso (ver supabase/migrations/004_dueno_gestiona_usuarios.sql).
 export const actualizarUsuario = async (id: string, role: Rol, active: boolean) => {
-  const { error } = await getClient().rpc('actualizar_usuario', { usuario: id, nuevo_rol: role, activo: active });
+  const { error } = await clienteSupabase().rpc('actualizar_usuario', { usuario: id, nuevo_rol: role, activo: active });
   if (error) {
     if (error.message.includes('actualizar_usuario')) {
       throw new Error('Falta ejecutar 004_dueno_gestiona_usuarios.sql en Supabase.');
@@ -92,7 +85,7 @@ export const actualizarUsuario = async (id: string, role: Rol, active: boolean) 
 };
 
 const obtenerPerfil = async (userId: string): Promise<Usuario> => {
-  const { data, error } = await getClient()
+  const { data, error } = await clienteSupabase()
     .from('profiles')
     .select(PERFIL_COLUMNAS)
     .eq('id', userId)
@@ -115,7 +108,7 @@ const perfilActivo = async (userId: string): Promise<Usuario> => {
 };
 
 export const iniciarSesion = async (email: string, password: string): Promise<Usuario> => {
-  const { data, error } = await getClient().auth.signInWithPassword({
+  const { data, error } = await clienteSupabase().auth.signInWithPassword({
     email: normalizarEmail(email),
     password
   });
@@ -185,7 +178,7 @@ export const registrarMesero = async (email: string, password: string, name: str
     throw new Error('La contraseña debe tener al menos 6 caracteres');
   }
 
-  const { data, error } = await getClient().auth.signUp({
+  const { data, error } = await clienteSupabase().auth.signUp({
     email: normalizedEmail,
     password,
     options: { data: { name: name.trim() } }
@@ -206,7 +199,7 @@ export const registrarMesero = async (email: string, password: string, name: str
 // Recuperación de contraseña: Supabase envía un enlace al correo. Al abrirlo, la app
 // recibe una sesión temporal y muestra el formulario de nueva contraseña.
 export const enviarEnlaceRecuperacion = async (email: string) => {
-  const { error } = await getClient().auth.resetPasswordForEmail(normalizarEmail(email), {
+  const { error } = await clienteSupabase().auth.resetPasswordForEmail(normalizarEmail(email), {
     redirectTo: window.location.origin
   });
   if (error) throw new Error(traducirError(error));
@@ -220,7 +213,7 @@ export const sesionRecuperacionLista = async () => {
 };
 
 export const cambiarContrasena = async (nuevaContrasena: string) => {
-  const client = getClient();
+  const client = clienteSupabase();
   const { error } = await client.auth.updateUser({ password: nuevaContrasena });
   if (error) throw new Error(traducirError(error));
   // El enlace abre una sesión temporal; se cierra para que el usuario entre con la nueva contraseña

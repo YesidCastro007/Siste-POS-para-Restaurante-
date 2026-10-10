@@ -16,7 +16,7 @@ export default function ModalDetalleVenta({ venta, onCerrar }: { venta: Venta; o
         <CardHeader className="border-b border-cyan-400/20 shrink-0">
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="text-white text-base sm:text-xl">Detalle de Venta - Mesa {venta.mesa}</CardTitle>
-            <Button
+            <Button aria-label="Cerrar"
               onClick={onCerrar}
               variant="outline"
               size="sm"

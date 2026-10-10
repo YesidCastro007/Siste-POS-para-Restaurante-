@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMesas, mantenerActualizado } from '@/lib/datos';
 import { cargarZonas, ZONAS_POR_DEFECTO, type Zona } from '@/lib/menu';
-import { nombreItem, subtotal } from '@/lib/pedidos';
+import { type Mesa, nombreItem, subtotal } from '@/lib/pedidos';
 import { pesos } from '@/lib/formato';
+import { claveColorDelMesero, type ClaveColor } from '@/lib/meseroColors';
 
-// Colores sólidos con texto blanco, para que se lean bien sobre el fondo claro
-const MESERO_COLORS = {
+// Colores sólidos con texto blanco, para que se lean bien sobre el fondo claro.
+// Cada mesero tiene el mismo color que ve en su propio panel.
+const COLORES_SOLIDOS: Record<ClaveColor, { bg: string; border: string; text: string }> = {
   blue: { bg: 'bg-blue-600', border: 'border-blue-700', text: 'text-white' },
   purple: { bg: 'bg-purple-600', border: 'border-purple-700', text: 'text-white' },
   orange: { bg: 'bg-orange-600', border: 'border-orange-700', text: 'text-white' },
@@ -21,18 +23,10 @@ const MESERO_COLORS = {
   amber: { bg: 'bg-amber-700', border: 'border-amber-800', text: 'text-white' }
 };
 
-const getMeseroColorConfig = (meseroName: string) => {
-  const colorKeys = Object.keys(MESERO_COLORS);
-  let hash = 0;
-  for (let i = 0; i < meseroName.length; i++) {
-    hash = meseroName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colorKey = colorKeys[Math.abs(hash) % colorKeys.length];
-  return MESERO_COLORS[colorKey] || MESERO_COLORS.blue;
-};
+const getMeseroColorConfig = (meseroName: string) => COLORES_SOLIDOS[claveColorDelMesero(meseroName ?? '')];
 
 export default function CajeroMesasView() {
-  const [mesas, setMesas] = useState({});
+  const [mesas, setMesas] = useState<Record<string, Mesa>>({});
   const [zonas, setZonas] = useState<Zona[]>(ZONAS_POR_DEFECTO);
   const [zonaElegida, setZonaElegida] = useState(1);
 
@@ -43,7 +37,7 @@ export default function CajeroMesasView() {
       try {
         const [mesasGuardadas, zonasGuardadas] = await Promise.all([cargarMesas(), cargarZonas()]);
         if (carga !== numeroCarga) return;
-        setMesas(mesasGuardadas);
+        setMesas(mesasGuardadas as Record<string, Mesa>);
         setZonas(zonasGuardadas);
       } catch (error) {
         console.error('Error cargando mesas:', error.message);
@@ -55,8 +49,8 @@ export default function CajeroMesasView() {
   // Si la zona elegida ya no existe, se muestra la primera
   const zona = zonas.find(z => z.numero === zonaElegida) ?? zonas[0];
   const pisoSeleccionado = zona.numero;
-  const mesasActivas = Object.entries(mesas).filter(([key, mesa]: [string, any]) => mesa.pedidos?.length > 0);
-  const totalMesasActivas = mesasActivas.reduce((sum, [key, mesa]: [string, any]) => sum + (mesa.total || 0), 0);
+  const mesasActivas = Object.entries(mesas).filter(([key, mesa]) => mesa.pedidos?.length > 0);
+  const totalMesasActivas = mesasActivas.reduce((sum, [key, mesa]) => sum + (mesa.total || 0), 0);
 
   return (
     <>
@@ -86,7 +80,7 @@ export default function CajeroMesasView() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {zonas.map((z) => {
               const mesasDelPiso = mesasActivas.filter(([key]) => key.startsWith(`${z.numero}-`));
-              const totalPiso = mesasDelPiso.reduce((sum, [key, mesa]: [string, any]) => sum + (mesa.total || 0), 0);
+              const totalPiso = mesasDelPiso.reduce((sum, [key, mesa]) => sum + (mesa.total || 0), 0);
               return (
                 <Button
                   key={z.numero}
@@ -138,7 +132,7 @@ export default function CajeroMesasView() {
                         {pesos(mesaData.total)}
                       </p>
                       <p className={`text-[9px] sm:text-xs ${colorConfig.text} mt-0.5 sm:mt-1`}>
-                        {mesaData.pedidos?.length} items
+                        {mesaData.pedidos?.length} {mesaData.pedidos?.length === 1 ? 'producto' : 'productos'}
                       </p>
                     </>
                   ) : (
@@ -165,7 +159,7 @@ export default function CajeroMesasView() {
             ) : (
               mesasActivas
                 .filter(([key]) => key.startsWith(`${pisoSeleccionado}-`))
-                .map(([mesaKey, mesaData]: [string, any]) => {
+                .map(([mesaKey, mesaData]) => {
                   const numero = mesaKey.split('-')[1];
                   const colorConfig = getMeseroColorConfig(mesaData.mesero);
                   return (

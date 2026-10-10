@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cargarMenu, cargarZonas, ZONAS_POR_DEFECTO, type Categoria, type Zona } from '@/lib/menu';
 import { getMeseroColorConfig } from '@/lib/meseroColors';
 import { cargarMesas, guardarCambiosMesas, liberarMesa, liberarMesaCobrada, registrarVenta, leerConfig, mantenerActualizado } from '@/lib/datos';
-import ModalPedido, { type Mesa } from './ModalPedido';
+import ModalPedido from './ModalPedido';
 import ModalCobro from './ModalCobro';
 import { pesos } from '@/lib/formato';
+import type { Mesa } from '@/lib/pedidos';
 
 export default function MeseroDashboard({ user, onLogout }) {
   const negocio = useNombreNegocio();
@@ -323,7 +324,7 @@ export default function MeseroDashboard({ user, onLogout }) {
               </div>
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <div className="w-3 h-3 sm:w-4 sm:h-4 bg-slate-400/10 border border-slate-400/50 rounded"></div>
-                <span className="text-gray-300">Otro Mesero 🔒</span>
+                <span className="text-gray-300">Otro mesero</span>
               </div>
             </div>
           </CardContent>
@@ -378,11 +379,6 @@ export default function MeseroDashboard({ user, onLogout }) {
                     {ocupada && mesaData.total > 0 && (
                       <p className="text-[10px] sm:text-xs font-medium mt-0.5 sm:mt-1">
                         {pesos(mesaData.total)}
-                      </p>
-                    )}
-                    {ocupada && !esMiMesa && (
-                      <p className="text-[9px] sm:text-xs opacity-60 mt-0.5 sm:mt-1">
-                        🔒
                       </p>
                     )}
                   </Button>

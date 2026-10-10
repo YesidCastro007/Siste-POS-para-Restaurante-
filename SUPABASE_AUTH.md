@@ -14,12 +14,12 @@ Sin estos pasos la app no deja iniciar sesión, porque no hay usuarios por defec
 ## 2. Crear las tablas
 
 1. Ve a **SQL Editor → New query**.
-2. Si nunca ejecutaste `supabase/migrations/001_initial_schema.sql`, pega su contenido y pulsa **Run**.
-3. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**.
-4. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
-5. Pega el contenido de `supabase/migrations/004_dueno_gestiona_usuarios.sql` y pulsa **Run**. Esto deja que el dueño cambie roles y desactive usuarios desde su panel.
-6. Pega el contenido de `supabase/migrations/005_robustez.sql` y pulsa **Run**. Esto hace que solo el personal **activo** pueda ver y cambiar datos, y que las cuentas nuevas queden inactivas hasta que el dueño las active.
-7. Pega el contenido de `supabase/migrations/006_menu_y_mesas.sql` y pulsa **Run**. Esto crea el menú editable (categorías y productos) y las zonas de mesas. Si el menú está vacío, carga el menú que tenía la app. Después, el dueño y la cajera cambian platos, precios y mesas desde **Menú y mesas** en su panel.
+2. Pega el contenido de `supabase/migrations/002_auth_profiles.sql` y pulsa **Run**. (El archivo `001_initial_schema.sql` es el esquema viejo: no lo ejecutes.)
+3. Pega el contenido de `supabase/migrations/003_datos_compartidos.sql` y pulsa **Run**. Esto crea las tablas de mesas, ventas y configuración que comparten todos los dispositivos.
+4. Pega el contenido de `supabase/migrations/004_dueno_gestiona_usuarios.sql` y pulsa **Run**. Esto deja que el dueño cambie roles y desactive usuarios desde su panel.
+5. Pega el contenido de `supabase/migrations/005_robustez.sql` y pulsa **Run**. Esto hace que solo el personal **activo** pueda ver y cambiar datos, y que las cuentas nuevas queden inactivas hasta que el dueño las active.
+6. Pega el contenido de `supabase/migrations/006_menu_y_mesas.sql` y pulsa **Run**. Esto crea el menú editable (categorías y productos) y las zonas de mesas. Si el menú está vacío, carga el menú que tenía la app. Después, el dueño y la cajera cambian platos, precios y mesas desde **Menú y mesas** en su panel.
+7. Pega el contenido de `supabase/migrations/007_permisos_por_rol.sql` y pulsa **Run**. Esto hace que solo el dueño y la cajera puedan cambiar el estado de la caja, los cierres y el número de WhatsApp (los meseros siguen viéndolos). Al final muestra una tabla con los permisos: deben aparecer 4 en `config`, 1 en `mesas` y 2 en `ventas`.
 
 ## 3. Configurar las direcciones de la app
 
@@ -112,4 +112,4 @@ Si el correo no llega, revisa en Supabase **Logs → Auth** el error que aparece
 
 - Cualquier persona puede registrarse desde la pantalla de login, siempre como mesero. Si quieres que solo el dueño cree cuentas, desactiva **Allow new users to sign up** en **Authentication → Sign In / Providers**.
 - Cada pestaña del navegador tiene su propia sesión, igual que antes.
-- Las mesas, ventas, sabores de sopa, estado de la caja y número de WhatsApp se guardan en Supabase, así que todos los dispositivos ven lo mismo y se actualiza al instante.
+- Las mesas, ventas, el menú, las zonas, el estado de la caja y el número de WhatsApp se guardan en Supabase, así que todos los dispositivos ven lo mismo y se actualiza al instante.

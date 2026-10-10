@@ -1,17 +1,15 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "shadow-pos",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "cross-env VITE_ENABLE_ROUTE_MESSAGING=true vite",
+    "dev": "vite",
     "build": "vite build",
-    "build:dev": "cross-env VITE_ENABLE_ROUTE_MESSAGING=true vite build --mode development --sourcemap",
-    "build:map": "cross-env VITE_ENABLE_ROUTE_MESSAGING=true vite build --sourcemap",
+    "build:dev": "vite build --mode development --sourcemap",
+    "verificar": "tsc --noEmit -p tsconfig.app.json",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "preview:dev": "npm run build:dev && npm run preview",
-    "test:edge-functions": "cd supabase/edge_function && deno task test"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
